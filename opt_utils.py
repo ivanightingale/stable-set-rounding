@@ -1,28 +1,7 @@
 import numpy as np
 import cvxpy as cp
 import networkx as nx
-
-
-# decompose a positive semidefinite matrix X = YY*
-def decompose_psd(X, tol=1e-9):
-    n = X.shape[0]
-    eigen_val, eigen_vec = np.linalg.eigh(X)
-    non_neg_eig_idx = eigen_val >= tol
-    return eigen_vec[:, non_neg_eig_idx] @ np.diag(np.sqrt(eigen_val[non_neg_eig_idx]))
-
-
-# remove the small eigenvalues (all eigenvalues less than tol) of a PSD matrix (so all negative eiganvalues will be
-# removed)
-def remove_small_eigenvalues(X, tol=1e-6):
-    eigen_val, eigen_vec = np.linalg.eigh(X)
-    eigen_val = np.real(eigen_val)
-    idx_to_keep = eigen_val >= tol
-    return eigen_vec[:, idx_to_keep] @ np.diag(eigen_val[idx_to_keep]) @ eigen_vec[:, idx_to_keep].T
-
-
-# normalize the rows of matrix X
-def normalize_rows(X):
-    return X / np.linalg.norm(X, axis=1)[:, np.newaxis]
+from linalg_utils import normalize_rows, eigh_proj, decompose_psd
 
 
 # project each entry of vector v into the annulus with inner radius min_r and outer radius max_r centered at 0
@@ -80,33 +59,6 @@ def hyperplane_rounding(Y, cost, min_r=1, max_r=1, n_iter=100, is_complex=False)
     return min_cost, best_x
 
 
-# get the eigenvalues and eigenvectors of PSD X, removing the delta_rank smallest eigenvalues
-def eigh_proj(X, delta_rank):
-    assert X.shape[0] > delta_rank
-    eigen_val, eigen_vec = np.linalg.eigh(X)
-    eigen_val = np.real(eigen_val)
-    # sort by eigenvalues, from the largest to the smallest
-    idx = eigen_val.argsort()[::-1]
-    eigen_val = eigen_val[idx]
-    eigen_vec = eigen_vec[:, idx]
-    return eigen_val, eigen_vec
-
-
-# eigen-project PSD X to decrease its rank by delta_rank
-def eigen_proj(X, delta_rank):
-    assert X.shape[0] > delta_rank
-    current_rank = np.linalg.matrix_rank(X, tol=1e-9)
-    target_rank = current_rank - delta_rank
-    X_proj = X
-    new_rank = current_rank
-    if target_rank >= 1:
-        new_rank = target_rank
-        eigen_val, eigen_vec = eigh_proj(X, delta_rank)
-
-        X_proj = eigen_vec[:, range(new_rank)] @ np.diag(eigen_val[range(new_rank)]) @ eigen_vec[:, range(new_rank)].T
-    return X_proj, new_rank
-
-
 # approximately reduce rank of X = YY* by delta_rank via eigenprojection and row normalization
 # if can't be reduced anymore, return the original Y
 def elliptope_eigen_proj(Y, delta_rank=1):
@@ -125,9 +77,12 @@ def elliptope_eigen_proj(Y, delta_rank=1):
     return Y_proj, new_rank
 
 
-# perform fixed point iteration on cvxpy variable X, where X is the optimal solution of prob
-def fixed_point_iteration(prob, X, shift, is_complex, returns_path=False, tol=1e-4, verbose=False, solver=cp.MOSEK):
+# perform fixed point iteration on cvxpy variable X, where X is a solution of prob
+def fixed_point_iteration(prob, X, shift=None, is_complex=False, returns_path=False, tol=1e-4, verbose=False,
+                          solver=cp.MOSEK):
     n = X.shape[0]
+    if shift is None:
+        shift = np.zeros(n)
     X_path = None
     if returns_path:
         X_path = []
@@ -161,7 +116,8 @@ def fixed_point_iteration(prob, X, shift, is_complex, returns_path=False, tol=1e
             prev_X.value = X.value
     print_iteration_info("fixed point", prob, X)
     print("iterations: ", n_iter)
-    return np.array(X_path)
+    if returns_path:
+        return np.array(X_path)
 
 
 # load n vertices of a graph as a networkx Graph
@@ -186,7 +142,7 @@ def load_graph(graph_file, type, n=0, first_node=0, random=False):
             first_vertex = np.floor(np.random.default_rng().random() * (len(G) - n - 1)).astype(int)
             G = G.subgraph(list(G.nodes)[first_vertex:first_vertex + n])
         else:
-            G = G.subgraph(list(G.nodes)[first_node : (first_node + n)])
+            G = G.subgraph(list(G.nodes)[first_node: (first_node + n)])
         assert len(G) == n
     nx.draw(G, nx.circular_layout(G))
     return G
@@ -224,3 +180,26 @@ def build_enriched_supergraph(G, treewidth_algorithm_idx=0):
                 break
 
     return G_bar
+
+# verifies X is exact and recovers the incidence vector from X
+def recover_incidence_vector(X, type, tol=1e-6):
+    n = X.shape[0]
+    x = None
+    if type == "lovasz":
+        x = decompose_psd(X)
+        assert x.shape[1] == 1
+        x = x * 1 / np.min(x[x > tol])
+    elif type == "grotschel":
+        x = np.diag(X)
+    elif type == "benson":
+        x = decompose_psd(X, tol)
+        assert x.shape[1] == 1  # needs to be rank 1
+        x = x.reshape(1, -1)[0]
+        x *= x[n - 1]  # the last entry is the sign corresponding to the stable set
+        x = x[0:n-1]  # remove the last entry
+        x[x < 0] = 0  # set -1 to 0
+        n -= 1
+
+    assert all(np.isclose(x[i], 0) or np.isclose(x[i], 1) for i in range(n))
+
+    return np.round(x)
