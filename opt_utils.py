@@ -181,6 +181,7 @@ def build_enriched_supergraph(G, treewidth_algorithm_idx=0):
 
     return G_bar
 
+
 # verifies X is exact and recovers the incidence vector from X
 def recover_incidence_vector(X, type, tol=1e-6):
     n = X.shape[0]
@@ -196,10 +197,106 @@ def recover_incidence_vector(X, type, tol=1e-6):
         assert x.shape[1] == 1  # needs to be rank 1
         x = x.reshape(1, -1)[0]
         x *= x[n - 1]  # the last entry is the sign corresponding to the stable set
-        x = x[0:n-1]  # remove the last entry
+        x = x[0:n - 1]  # remove the last entry
         x[x < 0] = 0  # set -1 to 0
         n -= 1
 
     assert all(np.isclose(x[i], 0) or np.isclose(x[i], 1) for i in range(n))
 
     return np.round(x)
+
+
+def lovasz_sdp(G):
+    n = G.number_of_nodes()
+    Z = cp.Variable((n, n), PSD=True)
+    J = cp.Parameter((n, n), symmetric=True, value=np.ones((n, n)))
+    constraints = [cp.trace(Z) == 1]
+    constraints += [Z[i][j] == 0 for (i, j) in G.edges]
+    prob = cp.Problem(cp.Maximize(cp.trace(J @ Z)), constraints)
+    prob.solve()
+    return prob, Z
+
+
+def grotschel_sdp(G):
+    n = G.number_of_nodes()
+    X = cp.Variable((n, n), symmetric=True)
+    x = cp.Variable((n, 1), nonneg=True)
+    X_plus = cp.bmat([[cp.Constant([[1]]), x.T], [x, X]])
+    e = cp.Parameter(n, value=np.ones(n))
+    constraints = [X_plus >> 0]
+    constraints += [X[i][i] == x[i] for i in range(n)]
+    constraints += [X[i][j] == 0 for (i, j) in G.edges]
+    # prob_grotschel = cp.Problem(cp.Maximize(e @ x), constraints_grotschel)  # slightly different from result of maximizing tr(X)
+    prob = cp.Problem(cp.Maximize(cp.trace(X)), constraints)
+    prob.solve()
+    return prob, X, X_plus
+
+
+def benson_sdp(G):
+    n = G.number_of_nodes()
+    V = cp.Variable((n + 1, n + 1), PSD=True)
+    constraints = [V[i][i] == 1 for i in range(n + 1)]
+    constraints += [V[i][i] + V[j][j] + V[n][n] + 2 * (V[i][j] + V[i][n] + V[j][n]) == 1 for (i, j) in G.edges]
+    cost_mat = np.block([[0.5 * np.eye(n), np.array([[0.25]] * n)], [np.array([[0.25]] * n).T, 0]])
+    prob = cp.Problem(cp.Maximize(cp.trace(cost_mat @ V)), constraints)
+    prob.solve()
+    return prob, V
+
+
+def greedy_stable_set_rounding(X, G, n_iter=100):
+    n = G.number_of_nodes()
+    rng = np.random.default_rng()
+    max_val = -np.Inf
+    max_x = None
+    for i in range(n_iter):
+        remaining_vertices = np.array(range(n))
+        greedy_x = np.zeros(n)
+        p = np.diag(X) / np.sum(np.diag(X))
+        while len(remaining_vertices) > 0:
+            current_vertex = rng.choice(remaining_vertices, p=p)
+            greedy_x[current_vertex] = 1
+            idx_to_keep = remaining_vertices != current_vertex
+            remaining_vertices = remaining_vertices[idx_to_keep]
+            p = p[idx_to_keep]
+            for v in G.neighbors(current_vertex):
+                idx_to_keep = remaining_vertices != v
+                remaining_vertices = remaining_vertices[idx_to_keep]
+                p = p[idx_to_keep]
+            p = p / np.sum(p)
+
+        current_val = np.sum(greedy_x)
+        if current_val > max_val:
+            max_val = current_val
+            max_x = greedy_x
+
+    return max_x
+
+
+def sdp_sampling(prob, X, sdp_type, folder, graph_file, n_iter, write_to_file=True):
+    n = X.shape[0]
+    samples_path = folder + "/dat/samples/%s_samples_%s_%d.npy" % (sdp_type, graph_file, n)
+    try:
+        samples = np.load(samples_path)
+    except:
+        samples = np.array([])
+    rng = np.random.default_rng()
+    C = cp.Parameter((n, n), symmetric=True)
+    sampling_prob = cp.Problem(cp.Minimize(cp.trace(C @ X)), prob.constraints)
+
+    new_samples = [[]] * n_iter
+    for i in range(n_iter):
+        # generate random symmetric matrix value for C
+        A = rng.uniform(-1, 1, (n, n))
+        C.value = A.T + A
+        sampling_prob.solve()
+        new_samples[i] = X.value
+
+    if len(samples) == 0:
+        samples = np.array(new_samples)
+    else:
+        samples = np.append(samples, np.array(new_samples), axis=0)
+
+    if write_to_file:
+        np.save(samples_path, samples)
+
+    return samples
