@@ -5,6 +5,7 @@ using Graphs
 using EzXML
 using GraphIO.GraphML
 using Random
+using COSMO
 
 # Heuristic for max indep set
 function max_ind_set(G,N=1000)
@@ -38,7 +39,7 @@ function getQ(E,t,lam,Lam)
     M = (i,j) -> .5*(Ik[:,i]*Ik[:,j]' + Ik[:,j]*Ik[:,i]')
     Q0 = t * M(i0,i0)
     Q1 = sum(lam[i] * (M(i,i) - M(i,i0)) for i in 1:n)
-    Q2 = sum(Lam[src(e),dst(e)] * M(src(e),dst(e)) for e in E)
+    Q2 = sum(Lam[src(e),dst(e)] * M(src(e),dst(e)) for e in E)  # probably the bottleneck
     return Symmetric(Q0 + Q1 + Q2 - Diagonal([w;0]))
 end
 
@@ -46,14 +47,18 @@ end
 function dualSDP(E,w)
     n = length(w)
     i0 = n+1
-    model = Model(optimizer_with_attributes(Mosek.Optimizer, "QUIET" => true))
+    # model = Model(optimizer_with_attributes(Mosek.Optimizer, "QUIET" => true))
+    model = Model(optimizer_with_attributes(COSMO.Optimizer, "complete_dual" => true))
     @variable(model, t)
     @variable(model, lam[1:n])
     @variable(model, LamVec[1:length(E)])
     Lam = sparse([src(e) for e in E],[dst(e) for e in E],LamVec,n,n)
-    Q = getQ(E,t,lam,Lam)
+    println("Start getting Q")
+    Q = getQ(E,t,lam,Lam)  # takes a lot of time
+    println("end getting Q")
     @constraint(model, X, Q in PSDCone())
     @objective(model, Min, t)
+    println("Optimizer starts")
     optimize!(model)
     X_r = Symmetric(dual.(X))
     val_r = value(t)
@@ -80,7 +85,7 @@ function round_valfun(G,w,val)
     S = collect(1:n)
     xr = falses(n)
     while length(S)>0
-        idx = argmax(w[j] + val(del(G,S,j)) for j in S)
+        idx = argmax(w[j] + val(del(G,S,j)) for j in S) # this part could be very slow
         j = S[idx]
         xr[j] = 1
         S = del(G,S,j)
@@ -89,7 +94,7 @@ function round_valfun(G,w,val)
 end
 
 #-----------------------------------------
-G = loadgraph("dat/sanr200-0-9.graphml", GraphMLFormat())
+G = loadgraph("dat/johnson32-2-4.graphml", GraphMLFormat())
 n = nv(G)
 
 # n = 50                          # num vertices

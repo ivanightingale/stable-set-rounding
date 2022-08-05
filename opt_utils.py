@@ -123,7 +123,7 @@ def fixed_point_iteration(prob, X, shift=None, is_complex=False, returns_path=Fa
 # load n vertices of a graph as a networkx Graph
 # if n == 0, load the entire graph
 # if random == True, then first_node doesn't have any effect
-def load_graph(graph_file, type, n=0, first_node=0, random=False):
+def load_graph(graph_file, type, n=0, first_node=0, random=False, display=False):
     data_path = "dat/"
     with open(data_path + graph_file) as f:
         if type == 0:
@@ -144,7 +144,9 @@ def load_graph(graph_file, type, n=0, first_node=0, random=False):
         else:
             G = G.subgraph(list(G.nodes)[first_node: (first_node + n)])
         assert len(G) == n
-    nx.draw(G, nx.circular_layout(G))
+
+    if display:
+        nx.draw(G, nx.circular_layout(G))
     return G
 
 
@@ -214,6 +216,7 @@ def lovasz_sdp(G):
     constraints += [Z[i][j] == 0 for (i, j) in G.edges]
     prob = cp.Problem(cp.Maximize(cp.trace(J @ Z)), constraints)
     prob.solve()
+    print(prob.value)
     return prob, Z
 
 
@@ -229,6 +232,7 @@ def grotschel_sdp(G):
     # prob_grotschel = cp.Problem(cp.Maximize(e @ x), constraints_grotschel)  # slightly different from result of maximizing tr(X)
     prob = cp.Problem(cp.Maximize(cp.trace(X)), constraints)
     prob.solve()
+    print(prob.value)
     return prob, X, X_plus
 
 
@@ -240,6 +244,7 @@ def benson_sdp(G):
     cost_mat = np.block([[0.5 * np.eye(n), np.array([[0.25]] * n)], [np.array([[0.25]] * n).T, 0]])
     prob = cp.Problem(cp.Maximize(cp.trace(cost_mat @ V)), constraints)
     prob.solve()
+    print(prob.value)
     return prob, V
 
 
@@ -272,13 +277,13 @@ def greedy_stable_set_rounding(X, G, n_iter=100):
     return max_x
 
 
-def sdp_sampling(prob, X, sdp_type, folder, graph_file, n_iter, write_to_file=True):
+def sdp_sampling(prob, X, sdp_type, folder, graph_file, n_iter=0, write_to_file=True):
     n = X.shape[0]
     samples_path = folder + "/dat/samples/%s_samples_%s_%d.npy" % (sdp_type, graph_file, n)
     try:
         samples = np.load(samples_path)
     except:
-        samples = np.array([])
+        samples = None
     rng = np.random.default_rng()
     C = cp.Parameter((n, n), symmetric=True)
     sampling_prob = cp.Problem(cp.Minimize(cp.trace(C @ X)), prob.constraints)
@@ -291,10 +296,11 @@ def sdp_sampling(prob, X, sdp_type, folder, graph_file, n_iter, write_to_file=Tr
         sampling_prob.solve()
         new_samples[i] = X.value
 
-    if len(samples) == 0:
-        samples = np.array(new_samples)
-    else:
-        samples = np.append(samples, np.array(new_samples), axis=0)
+    if n_iter > 0:
+        if samples is None:
+            samples = np.array(new_samples)
+        else:
+            samples = np.append(samples, np.array(new_samples), axis=0)
 
     if write_to_file:
         np.save(samples_path, samples)
