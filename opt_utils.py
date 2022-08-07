@@ -233,7 +233,7 @@ def grotschel_sdp(G):
     prob = cp.Problem(cp.Maximize(cp.trace(X)), constraints)
     prob.solve()
     print(prob.value)
-    return prob, X, X_plus
+    return prob, X, x, X_plus
 
 
 def benson_sdp(G):

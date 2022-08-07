@@ -26,7 +26,6 @@ function dualSDP(E,w)
     n = length(w)
     i0 = n + 1
     ϵ = 1e-6
-    # model = Model(optimizer_with_attributes(Mosek.Optimizer))
     model = Model(optimizer_with_attributes(COSMO.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ))
     @variable(model, t)
     @variable(model, λ[1:n])
@@ -71,7 +70,7 @@ function round_valfun(G,w,val)
 end
 
 #-----------------------------------------
-G = loadgraph("dat/san400-0-9-1.graphml", GraphMLFormat())
+G = loadgraph("dat/brock200-2.graphml", GraphMLFormat())
 n = nv(G)
 
 # # Graph
