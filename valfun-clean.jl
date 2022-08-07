@@ -35,11 +35,15 @@ end
 # Construct PSD matrix of dual SDP
 function getQ(E,t,lam,Lam)
     n = length(lam)
-    Ik = collect(I(n+1))
+    i0 = n + 1
+    Ik = collect(I(i0))
     M = (i,j) -> .5*(Ik[:,i]*Ik[:,j]' + Ik[:,j]*Ik[:,i]')
     Q0 = t * M(i0,i0)
     Q1 = sum(lam[i] * (M(i,i) - M(i,i0)) for i in 1:n)
-    Q2 = sum(Lam[src(e),dst(e)] * M(src(e),dst(e)) for e in E)  # probably the bottleneck
+    Q2 = sum(Lam[src(e),dst(e)] * M(src(e),dst(e)) for e in E)  # bottleneck
+    println(typeof(Q0))
+    println(typeof(Q1))
+    println(typeof(Q2))
     return Symmetric(Q0 + Q1 + Q2 - Diagonal([w;0]))
 end
 
@@ -51,8 +55,8 @@ function dualSDP(E,w)
     model = Model(optimizer_with_attributes(COSMO.Optimizer, "complete_dual" => true))
     @variable(model, t)
     @variable(model, lam[1:n])
-    @variable(model, LamVec[1:length(E)])
-    Lam = sparse([src(e) for e in E],[dst(e) for e in E],LamVec,n,n)
+    @variable(model, LamVec[1:length(E)])  # vector of lambda_ij
+    Lam = sparse([src(e) for e in E],[dst(e) for e in E],LamVec,n,n)  # sparse matrix of lambda_ij
     println("Start getting Q")
     Q = getQ(E,t,lam,Lam)  # takes a lot of time
     println("end getting Q")
@@ -94,11 +98,11 @@ function round_valfun(G,w,val)
 end
 
 #-----------------------------------------
-G = loadgraph("dat/johnson32-2-4.graphml", GraphMLFormat())
+G = loadgraph("dat/hamming6-4.graphml", GraphMLFormat())
 n = nv(G)
 
 # n = 50                          # num vertices
-i0 = n+1                        # homogenizing index
+# i0 = n+1                        # homogenizing index
 # sd = Int(ceil(rand()*1000))     # random seed
 # println("seed: ", sd)
 # Random.seed!(sd)
