@@ -25,9 +25,6 @@ using EzXML
 # ╔═╡ 131c8ce2-3432-4ab1-9de0-10a4eb946e3d
 using COSMO
 
-# ╔═╡ 02a726d7-377c-47ed-bd96-5423f139a0a2
-
-
 # ╔═╡ 66970552-32ce-458e-a5ff-722c137c07db
 G = loadgraph("dat/johnson8-2-4.graphml", GraphMLFormat())
 
@@ -58,7 +55,7 @@ Q = Symmetric(sparse([src(e) for e in E],[dst(e) for e in E], Λ, i0, i0) +  + s
 Q[i0, i0] = t
 
 # ╔═╡ 57e53253-04a1-47cb-bad8-06d56a93dd1e
-@constraint(model, Q in PSDCone())
+# @constraint(model, Q in PSDCone())
 
 # ╔═╡ 0ca9d56b-a997-41bf-9798-5cdf123b3232
 function getQ(E,t,lam,Lam)
@@ -564,7 +561,6 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═54a43247-2921-4243-bd27-45b99eef7385
 # ╠═eff40d6d-d12b-4ca1-981d-5dd1b15e6ae1
 # ╠═c985a0d6-8ae1-46c1-aeec-bf547c758a3a
-# ╠═02a726d7-377c-47ed-bd96-5423f139a0a2
 # ╠═db4a855b-ddca-42f8-b51c-73282cd51be3
 # ╠═eef5f984-ceb0-4ba2-bdf7-7b883ff95771
 # ╠═131c8ce2-3432-4ab1-9de0-10a4eb946e3d

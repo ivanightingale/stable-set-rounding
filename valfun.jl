@@ -24,13 +24,14 @@ end
 # Solve dual SDP
 function dualSDP(E,w)
     n = length(w)
-    i0 = n+1
-    # model = Model(optimizer_with_attributes(Mosek.Optimizer, "QUIET" => true))
-    model = Model(optimizer_with_attributes(COSMO.Optimizer, "complete_dual" => true))
+    i0 = n + 1
+    ϵ = 1e-6
+    # model = Model(optimizer_with_attributes(Mosek.Optimizer))
+    model = Model(optimizer_with_attributes(COSMO.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ))
     @variable(model, t)
     @variable(model, λ[1:n])
     @variable(model, Λ[1:length(E)])  # vector of lambda_ij
-    Q = Symmetric(sparse([src(e) for e in E],[dst(e) for e in E], Λ, i0, i0) +  + sparse(collect(1:n), fill(i0, n), -λ, i0, i0)) * 0.5 + sparse(collect(1:n), collect(1:n), λ, i0, i0) - Diagonal([w;0])
+    Q = Symmetric(sparse([src(e) for e in E],[dst(e) for e in E], Λ, i0, i0) +  + sparse(collect(1:n), fill(i0, n), -λ, i0, i0)) * 0.5 + sparse(collect(1:n), collect(1:n), λ, i0, i0) - Diagonal([w; 0])
     Q[i0, i0] = t
     @constraint(model, X, Q in PSDCone())
     @objective(model, Min, t)
@@ -45,12 +46,12 @@ end
 
 # Value funciton approximation
 function valfun(Q)
-    tol = 1e-6      # Warning: this tolerance might need to be tweaked
+    tol = 1e-4
     n = size(Q,1)-1
     i0 = n+1
     A = Symmetric(Q[1:n,1:n])
     b = Q[1:n,i0]
-    return S -> b[S]'*pinv(A[S,S],rtol=tol)*b[S]  # pinv probably takes a significant portion of time
+    return S -> b[S]'*pinv(A[S,S],rtol=tol)*b[S]  # pinv probably takes a significant portion of time. The pinv of sparse matrix is often dense. Can we do something else?
 end
 
 # Rounding based on value function
@@ -70,7 +71,7 @@ function round_valfun(G,w,val)
 end
 
 #-----------------------------------------
-G = loadgraph("dat/sanr200-0-7.graphml", GraphMLFormat())
+G = loadgraph("dat/san400-0-9-1.graphml", GraphMLFormat())
 n = nv(G)
 
 # # Graph
@@ -85,6 +86,6 @@ println("SDP Value: ", sol.value)
 println("Eigvals: ", last(eigvals(sol.X),3))
 
 # Value fun & rounding
-val = valfun(Matrix(sol.Q))
+val = valfun(Matrix(sol.Q))  # convert SparseMatrix to Matrix
 xr = round_valfun(G,w,val)
 println("Rounded Value: ", w'*xr)
