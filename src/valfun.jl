@@ -50,7 +50,7 @@ function round_valfun(G, w, val, θ)
     xr = falses(n)
 
     while length(S) > 0
-        idx = argmax(w[j] + val(del(G,S,j)) for j in S) # this part could be very slow
+        idx = argmax(w[j] + val(del(G,S,j)) for j in S)
         j = S[idx]
         xr[j] = 1
         S = del(G,S,j)
@@ -96,10 +96,12 @@ function tabu_valfun(G, w, val, θ, ϵ=1e-6)
 end
 
 #-----------------------------------------
-graph_file = "san1000.mtx"
+graph_file = "MANN-a45.mtx"
 A = mmread("../dat/" * graph_file)
 G = complement(SimpleGraph(A))
 n = nv(G)
+println(n)
+println(ne(G))
 
 # Graph
 E = collect(edges(G))
@@ -114,9 +116,10 @@ println("Eigvals: ", last(eigvals(sol.X), 3))
 
 # Value fun & rounding
 val = valfun(Matrix(sol.Q))  # convert SparseMatrix to Matrix
-# xr = round_valfun(G, w, val, sol.value)
-xr = tabu_valfun(G, w, val, sol.value, 1e-3)
+xr = round_valfun(G, w, val, sol.value)
+xt = tabu_valfun(G, w, val, sol.value, 1e-3)
 
+# verify
 stable_set = findall(xr)
 println(stable_set)
 for i in stable_set
@@ -127,4 +130,15 @@ for i in stable_set
     end
 end
 
-println("Rounded Value: ", w'*xr)
+stable_set = findall(xt)
+println(stable_set)
+for i in stable_set
+    for j in stable_set
+        if has_edge(G, i, j)
+            println("Failed! Edge ", i, " ", j)
+        end
+    end
+end
+
+println("Rounded Value: ", w' * xr)
+println("Rounded Value: ", w' * xt)

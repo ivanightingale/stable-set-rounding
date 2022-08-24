@@ -10,6 +10,18 @@
 | Benson & Ye SDP | 15 | 9 | 14 |   |
 
 
+## MANN-a27
+| \|V\| | \|E\|  |  θ  |  α  |   round_valfun   |  tabu_valfun  |
+| ----- | ------ | --- | --- |   ----     |  ---- |
+|  378   |   702  |  132.76  | 126 |   125   |    2   |
+
+
+## MANN-a45
+| \|V\| | \|E\|  |  θ  |  α  |   round_valfun   |  tabu_valfun  |
+| ----- | ------ | --- | --- |   ----     |  ---- |
+|  1035   |   1980  |  356.05  | 345  |   342   |   3    |
+
+
 ## brock200-1
 | \|V\| | \|E\|  | θ |  α  |   round_valfun   |  tabu_valfun  |
 | ----- | ------ | --- | --- |   ----     |  ---- |
@@ -31,33 +43,33 @@
 |  400   |   20035  |   39.600 |  33  |   24   |   1  |
 
 ## c-fat200-1
-| \|V\| | \|E\|  |   θ |  α  |   round_valfun   | tabu_valfun  |
-| ----- | ------ | --- |   ----     |  ---- | ----- |
-|  200   |  18366  |  12   |  12  |   12   |   12   |
+| \|V\| | \|E\|  |   θ |  α  |   round_valfun   | tabu_valfun  |  perfect?  |
+| ----- | ------ | --- |   ----     |  ---- | ----- | -----  |
+|  200   |  18366  |  12   |  12  |   12   |   12   |   yes?     |
 
 
 ## c-fat500-2
-| \|V\| | \|E\|  |  θ |  α  |   round_valfun   | tabu_valfun  |
-| ----- | ------ | --- |   ----     |  ---- | ----- |
+| \|V\| | \|E\|  |  θ |  α  |   round_valfun   | tabu_valfun  |  perfect?  |
+| ----- | ------ | --- |   ----     |  ---- | ----- | -----  |
 |  500   |  115611  |   26   |  26  |   26   |  26  |
 
 
 ## c-fat500-5
-| \|V\| | \|E\|  |   θ |  α  |   round_valfun   | tabu_valfun  |
-| ----- | ------ | --- |   ----     | ---- | ----- |
+| \|V\| | \|E\|  |   θ |  α  |   round_valfun   | tabu_valfun  |  perfect?  |
+| ----- | ------ | --- |   ----     | ---- | ----- |  -----  |
 |  500   |  101559  |   64  |  64  |   64   |   64  |
 
 
 ## c-fat500-10
-| \|V\| | \|E\|  |  θ |  α  |   round_valfun   | tabu_valfun  |
-| ----- | ------ | --- |   ----     |  ---- | ----- |
+| \|V\| | \|E\|  |  θ |  α  |   round_valfun   | tabu_valfun  |  perfect?  |
+| ----- | ------ | --- |   ----     |  ---- | ----- |  -----  |
 |  500   |  78123  | 126  |  126  |   126   |  126   |
 
 
 ## hamming6-2
-| \|V\| | \|E\|  | θ  |  α |   round_valfun  |  tabu_valfun  |
-| ----- | ------ | -- | -- | ---- |  ---- |
-|  64   |   192  | 32 | 32 |  32  |  32   |
+| \|V\| | \|E\|  | θ  |  α |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | -- | -- | ---- |  ---- |  -----  |
+|  64   |   192  | 32 | 32 |  32  |  32   |   yes   |
 
 | method | fixed point iteration value | fixed point iteration value (no shift) | hyperplane rounding value | greedy value |
 | ------ | ---- | -------- | ---- | --- |
@@ -79,9 +91,9 @@
 
 
 ## hamming8-4
-| \|V\| | \|E\|  |  θ  |  α |   round_valfun  |  tabu_valfun  |
-| ----- | ------ | ---- | --- |  ----- |  ---  |
-|  256   |   11776   |  16  | 16  |  16   |  16 |
+| \|V\| | \|E\|  |  θ  |  α |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | ---- | --- |  ----- |  ---  | ----- |
+|  256   |   11776   |  16  | 16  |  16   |  16 |   5-cycle  |
 
 | method | fixed point iteration value | fixed point iteration value (no shift) | hyperplane rounding value | greedy value |
 | ------ |  ---- | -------- | ---- | --- |
@@ -99,9 +111,9 @@
 
 
 ## johnson8-2-4
-| \|V\| | \|E\|  | θ  |  α  |    round_valfun  |  tabu_valfun  |
-| ----- | ------ | --- | --- |    -----   | ---- |
-|  28   |   168  |  4   |  4  |    4    |   4   |
+| \|V\| | \|E\|  | θ  |  α  |    round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- | --- |    -----   | ---- | ------ |
+|  28   |   168  |  4   |  4  |    4    |   4   |   5-cycle   |
 
 | method | fixed point iteration value | fixed point iteration value (no shift) | hyperplane rounding value | greedy value |
 | ------ | --- | ---- | -------- | ---- |
@@ -111,9 +123,9 @@
 
 
 ## johnson8-4-4
-| \|V\| | \|E\|  |  θ  |  α  |    round_valfun  |  tabu_valfun  |
-| ----- | ------ | --- | --- |  ----    |   ----   |
-|  70   |   560  |  14 | 14  |   14    |    14     |
+| \|V\| | \|E\|  |  θ  |  α  |    round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- | --- |  ----    |   ----   |  ------  |
+|  70   |   560  |  14 | 14  |   14    |    14     |    5-cycle   |
 
 | method | fixed point iteration value | fixed point iteration value (no shift) | hyperplane rounding value | greedy value |
 | ------ |  ---- | -------- | ---- |  --- |
@@ -123,15 +135,15 @@
 
 
 ## johnson16-2-4
-| \|V\| | \|E\|  |  θ  |  α  |    round_valfun  |  tabu_valfun  |
-| ----- | ------ | --- |   ----     |  ----    |   ----   |
-|  120   |   1680  |  8  |   8   |   8   |    8   |
+| \|V\| | \|E\|  |  θ  |  α  |    round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- |   ----     |  ----    |   ----   | ----- |
+|  120   |   1680  |  8  |   8   |   8   |    8   |   5-cycle   |
 
 
 ## johnson32-2-4
-| \|V\| | \|E\|  | θ  |  α  |  round_valfun  |  tabu_valfun  |
-| ----- | ------ | --- | --- |   ----     |   -----   |
-|  496   |   14880  |  16  | 16  |   16   |  16   |
+| \|V\| | \|E\|  | θ  |  α  |  round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- | --- |   ----     |   -----   |  -----   |
+|  496   |   14880  |  16  | 16  |   16   |  16   |   5-cycle   |
 
 | method | fixed point iteration value | fixed point iteration value (no shift) | hyperplane rounding value | greedy value |
 | ------ |  ---- | -------- | ---- |  --- |
@@ -216,17 +228,17 @@ COSMO much faster than SCS
 
 
 ## **san1000**
-| \|V\| | \|E\|  | θ  | α  |   round_valfun  |  tabu_valfun  |
-| ----- | ------ | --- |   ----     |   ----- |   ------ |
-|  1000   |  249000  |   15  |  15  |   10   |  2  |
+| \|V\| | \|E\|  | θ  | α  |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- |   ----     |   ----- |   ------ | ------ |
+|  1000   |  249000  |   15  |  15  |   10   |  2  |  5-cycle   |
 
 COSMO much faster than SCS
 
 
 ## san200-0.7-1
-| \|V\| | \|E\|  | θ |  α  |   round_valfun  |  tabu_valfun  |
-| ----- | ------ | --- | --- |   ----     |   ---- |
-|  200   |  5970  | 30  | 30  |   30   |    30    |
+| \|V\| | \|E\|  | θ |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- | --- |   ----     |   ---- |  ------ |
+|  200   |  5970  | 30  | 30  |   30   |    30    |   5-cycle  |
 
 | method | fixed point iteration value | fixed point iteration value (no shift) | hyperplane rounding value | greedy value |
 | ------ |  ---- | -------- | ---- |  --- |
@@ -238,27 +250,27 @@ COSMO much faster than SCS
 
 
 ## san400-0.7-1
-| \|V\| | \|E\|  |  θ  |  α  |   round_valfun  |  tabu_valfun  |
-| ----- | ------ | --- |   ----     |   ---- |  --- |
-|  400   |  23940  |  40   |  40  |   40   |   40  |
+| \|V\| | \|E\|  |  θ  |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- |   ----     |   ---- |  --- |  ------  |
+|  400   |  23940  |  40   |  40  |   40   |   40  |   5-cycle   |
 
 
 ## san400-0.7-2
-| \|V\| | \|E\|  |  θ  |  α  |   round_valfun  |  tabu_valfun  |
-| ----- | ------ | --- |   ----     | ---- |  --- |
-|  400   |  23940  | 30  |  30  |   30   |   30   |
+| \|V\| | \|E\|  |  θ  |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- |   ----     | ---- |  --- |  ------  |
+|  400   |  23940  | 30  |  30  |   30   |   30   |   5-cycle  |
 
 
 ## **san400-0.7-3**
-| \|V\| | \|E\|  |  θ  |  α  |   round_valfun  |  tabu_valfun  |
-| ----- | ------ | --- |   ----     |  ----     | ---- |
-|  400   |  23940  |  22  |  22  |   16   |  4   |
+| \|V\| | \|E\|  |  θ  |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- |   ----     |  ----     | ---- |  -------  |
+|  400   |  23940  |  22  |  22  |   16   |  4   |    5-cycle   |
 
 
 ## san400-0.9-1
-| \|V\| | \|E\|  |  θ  |   α   |   round_valfun  |  tabu_valfun  |
-| ----- | ------ | --- | --- |   ----     | ---- |
-|  400   |  7980  | 100 |  100  |   100   |   100  |
+| \|V\| | \|E\|  |  θ  |   α   |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- | --- |   ----     | ---- | ------ |
+|  400   |  7980  | 100 |  100  |   100   |   100  |   5-cycle  |
 
 
 ## sanr200-0.7
