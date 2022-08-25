@@ -11,8 +11,8 @@ function dualSDP(E,w)
     n = length(w)
     i0 = n + 1
     ϵ = 1e-7
-    model = Model(optimizer_with_attributes(COSMO.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ, "decompose" => true, "max_iter" => 50000))  # for c-fat and larger graphs
-    # model = Model(optimizer_with_attributes(SCS.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ))
+    # model = Model(optimizer_with_attributes(COSMO.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ, "decompose" => true, "max_iter" => 50000))  # for larger graphs
+    model = Model(optimizer_with_attributes(SCS.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ))
     @variable(model, t)
     @variable(model, λ[1:n])
     @variable(model, Λ[1:length(E)])  # vector of lambda_ij
@@ -96,7 +96,7 @@ function tabu_valfun(G, w, val, θ, ϵ=1e-6)
 end
 
 #-----------------------------------------
-graph_file = "MANN-a45.mtx"
+graph_file = "hamming10-2.mtx"
 A = mmread("../dat/" * graph_file)
 G = complement(SimpleGraph(A))
 n = nv(G)
@@ -116,8 +116,9 @@ println("Eigvals: ", last(eigvals(sol.X), 3))
 
 # Value fun & rounding
 val = valfun(Matrix(sol.Q))  # convert SparseMatrix to Matrix
+
+println("round_valfun begins")
 xr = round_valfun(G, w, val, sol.value)
-xt = tabu_valfun(G, w, val, sol.value, 1e-3)
 
 # verify
 stable_set = findall(xr)
@@ -129,6 +130,11 @@ for i in stable_set
         end
     end
 end
+println("Rounded Value: ", w' * xr)
+
+
+println("tabu_valfun begins")
+xt = tabu_valfun(G, w, val, sol.value, 1e-3)
 
 stable_set = findall(xt)
 println(stable_set)
@@ -139,6 +145,4 @@ for i in stable_set
         end
     end
 end
-
-println("Rounded Value: ", w' * xr)
 println("Rounded Value: ", w' * xt)
