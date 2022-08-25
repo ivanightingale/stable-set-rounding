@@ -327,18 +327,33 @@ COSMO much faster than SCS
 | Benson & Ye SDP | 30 | 30 | 16 | |
 
 
-## san200-0.7-2
+## **san200-0.7-2**
+| \|V\| | \|E\|  | θ |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- | --- |   ----     |   ---- |  ------ |
+|  200   |  5970  |  18  | 18  |   18   |   1    |   5-cycle  |
 
 ## san200-0.9-1
+| \|V\| | \|E\|  | θ |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- | --- |   ----     |   ---- |  ------ |
+|  200   |  1990  |  70   |  70  |   70   |   70    |  5-cycle   |
 
 ## san200-0.9-2
+| \|V\| | \|E\|  | θ |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- | --- |   ----     |   ---- |  ------ |
+|  200   |  1990  |  60  |  60  |   60   |   60   |  5-cycle   |
 
-## san200-0.9-3
+## **san200-0.9-3**
+| \|V\| | \|E\|  | θ |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- | --- |   ----     |   ---- |  ------ |
+|  200   |  1990  |  44  |  44  |   44   |   2    |  5-cycle   |
 
+use Mosek
 
 
 ## san400-0.5-1
-
+| \|V\| | \|E\|  |  θ  |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
+| ----- | ------ | --- |   ----     |   ---- |  --- |  ------  |
+|  400   |  39900  |   13  |  13  |    13  |   13  |   5-cycle   |
 
 ## san400-0.7-1
 | \|V\| | \|E\|  |  θ  |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |

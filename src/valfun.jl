@@ -1,4 +1,4 @@
-using JuMP, SCS, COSMO
+using JuMP, SCS, COSMO, MosekTools
 using LinearAlgebra, SparseArrays
 using Combinatorics
 using MatrixMarket
@@ -11,8 +11,9 @@ function dualSDP(E,w)
     n = length(w)
     i0 = n + 1
     ϵ = 1e-7
-    # model = Model(optimizer_with_attributes(COSMO.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ, "decompose" => true, "max_iter" => 50000))  # for larger graphs
-    model = Model(optimizer_with_attributes(SCS.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ))
+    model = Model(optimizer_with_attributes(COSMO.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ, "decompose" => true, "max_iter" => 50000))  # for larger graphs
+    # model = Model(optimizer_with_attributes(SCS.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ))
+    # model = Model(optimizer_with_attributes(Mosek.Optimizer))
     @variable(model, t)
     @variable(model, λ[1:n])
     @variable(model, Λ[1:length(E)])  # vector of lambda_ij
