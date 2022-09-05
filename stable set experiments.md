@@ -102,7 +102,7 @@ faster than SCS, more PSD
 ## c-fat200-1
 | \|V\| | \|E\|  |   θ |  α  |   round_valfun   | tabu_valfun  |  perfect?  |
 | ----- | ------ | --- |   ----     |  ---- | ----- | -----  |
-|  200   |  18366  |  12   |  12  |   12   |   12   |   yes?     |
+|  200   |  18366  |  12   |  12  |   12   |   12   |   complement is not quasi-perfect     |
 
 ## c-fat200-2
 | \|V\| | \|E\|  |   θ |  α  |   round_valfun   | tabu_valfun  |  perfect?  |
@@ -134,7 +134,7 @@ faster than SCS, more PSD
 ## c-fat500-10
 | \|V\| | \|E\|  |  θ |  α  |   round_valfun   | tabu_valfun  |  perfect?  |
 | ----- | ------ | --- |   ----     |  ---- | ----- |  -----  |
-|  500   |  78123  | 126  |  126  |   126   |  126   |
+|  500   |  78123  | 126  |  126  |   126   |  126   |    yes?    |
 
 
 ## hamming6-2
@@ -179,9 +179,11 @@ faster than SCS, more PSD
 
 
 ## hamming10-2
-| \|V\| | \|E\|  | θ  |  α |   round_valfun  |  tabu_valfun  |
-| ----- | ------ | --- |  ----- | ----  | ---- |
-|  1024   |   5120  | 512 | 512  |       |      |
+| \|V\| | \|E\|  | θ  |  α |   round_valfun  |  tabu_valfun  |  is perfect?  |
+| ----- | ------ | --- |  ----- | ----  | ---- |  -----  |
+|  1024   |   5120  | 512 | 512  |       |   512    |   yes   |
+
+COSMO bugs out
 
 ## hamming10-4
 | \|V\| | \|E\|  | θ  |  α |   round_valfun  |  tabu_valfun  |
@@ -331,6 +333,8 @@ COSMO much faster than SCS
 | \|V\| | \|E\|  | θ |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
 | ----- | ------ | --- | --- |   ----     |   ---- |  ------ |
 |  200   |  5970  |  18  | 18  |   18   |   1    |   5-cycle  |
+
+use COSMO or Mosek
 
 ## san200-0.9-1
 | \|V\| | \|E\|  | θ |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
