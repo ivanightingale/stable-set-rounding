@@ -1,3 +1,5 @@
+Note: all data are on complements of the graphs
+
 ## MANN-a9
 | \|V\| | \|E\|  |  θ  |  α  |   round_valfun   |  tabu_valfun  |
 | ----- | ------ | --- | --- |   ----     |  ---- |
@@ -329,10 +331,10 @@ COSMO much faster than SCS
 | Benson & Ye SDP | 30 | 30 | 16 | |
 
 
-## **san200-0.7-2**
+## san200-0.7-2
 | \|V\| | \|E\|  | θ |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
 | ----- | ------ | --- | --- |   ----     |   ---- |  ------ |
-|  200   |  5970  |  18  | 18  |   18   |   1    |   5-cycle  |
+|  200   |  5970  |  18  | 18  |   18   |   18    |   5-cycle  |
 
 use COSMO or Mosek
 
