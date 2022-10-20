@@ -2,34 +2,8 @@ using JuMP, SCS, COSMO, MosekTools
 using LinearAlgebra, SparseArrays
 using Combinatorics
 using Graphs
-using GraphPlot, Compose
-import Cairo, Fontconfig
-using Colors
 
-
-function plot_graph_no_isolated(G, graph_name, use_complement)
-    if use_complement
-        image_file = "../images/" * graph_name * "_co.png"
-    else
-        image_file = "../images/" * graph_name * ".png"
-    end
-
-    V_no_isolated = vcat(filter(c -> length(c) > 1, connected_components(G))...)  # indices of vertices of G_S without isolated vertices
-    println("Non-isolated vertices: ", length(V_no_isolated))
-    if length(V_no_isolated) > 0
-        G_no_isolated = G[V_no_isolated]
-    else
-        G_no_isolated = G
-    end
-
-    if is_bipartite(G_no_isolated)
-        nodecolor = [colorant"lightseagreen", colorant"orange"]
-        draw(PNG(image_file, 100cm, 100cm), gplot(G_no_isolated, NODESIZE=0.05/sqrt(nv(G_no_isolated)), layout=spring_layout, nodefillc=nodecolor[bipartite_map(G_no_isolated)]))
-    else
-        draw(PNG(image_file, 100cm, 100cm), gplot(G_no_isolated, NODESIZE=0.05/sqrt(nv(G_no_isolated)), layout=spring_layout))
-    end
-end
-
+include("graph_utils.jl")
 
 # Solve dual SDP
 function dualSDP(E, w, solver, verbose=true)
@@ -74,7 +48,17 @@ end
 
 del = (G,S,i) -> setdiff(S, vcat(neighbors(G,i), [i]))
 
-# Rounding based on value function
+function get_valfun(G, w, solver="SCS", verbose=false)
+    E = collect(edges(G))
+    # @time sol = dualSDP(E, w, "SCS", false)
+    sol = dualSDP(E, w, solver, verbose)
+    println("SDP Value: ", sol.value)
+    # println("Eigvals: ", last(eigvals(sol.X), 3))
+    val = valfun(Matrix(sol.Q))  # convert SparseMatrix to Matrix
+    return val, sol.value
+end
+
+# rounding based on value function, a heuristics for general graphs
 function round_valfun(G, w, val, θ)
     n = length(w)
     S = collect(1:n)
@@ -91,14 +75,15 @@ function round_valfun(G, w, val, θ)
 end
 
 
-# iteratively apply discard rules and pick the first candidate
-function tabu_valfun(G, w, val, θ, ϵ=1e-6)
+# iteratively apply discard rules and pick the first candidate for imperfect graphs
+# TODO: make it work for the remaining cases
+function tabu_valfun_imperfect(G, w, val, θ, ϵ=1e-6)
     n = length(w)
     S = collect(1:n)
     xr = falses(n)
     current_weight = 0
 
-    S = single_discard(S, val, w, ϵ)
+    S = vertex_value_discard(S, val, w, ϵ)
 
     while !isempty(S)
         S = fixed_point_discard(S, G, θ, val, w, ϵ, current_weight)
@@ -113,26 +98,50 @@ function tabu_valfun(G, w, val, θ, ϵ=1e-6)
     return xr
 end
 
-# for perfect graphs,  verify that after applying a single round of elimination, the remaining vertices are all in some maximum stable sets
-function perfect_tabu_valfun_verify_I(G, w, val, θ, ϵ, graph_name, use_complement)
+
+# for perfect graphs, apply a single round of elimination
+function tabu_valfun_perfect(G, w, val, θ, ϵ)
     n = length(w)
     S = collect(1:n)
     xr = falses(n)
 
-    # S = single_discard(S, val, w, ϵ)
-    S = iterative_discard(S, G, θ, val, w, ϵ)
+    S = vertex_value_discard(S, val, w, ϵ)
+    S = set_value_discard(S, G, θ, val, w, ϵ)
+    while !isempty(S)
+        v = S[1]  # pick a vertex in the remaining candidates
+        xr[v] = true
+        S = del(G, S, v)  # this ensures the final output is a stable set
+        current_weight = w' * xr
+        println("Current weight: ", current_weight)
+    end
+    return xr
+end
+
+
+# for perfect graphs, verify that applying a single round of elimination results in the
+# candidate set I
+function perfect_tabu_valfun_verify_I(G, w, val, θ, ϵ, graph_name=nothing, use_complement=nothing)
+    n = length(w)
+    S = collect(1:n)
+    xr = falses(n)
+
+    S = vertex_value_discard(S, val, w, ϵ)
+    S = set_value_discard(S, G, θ, val, w, ϵ)
     println("Discard complete. Remaining size: ", length(S))
 
-    plot_graph_no_isolated(G[S], graph_name, use_complement)
+    # if graph_name != nothing && use_complement != nothing
+    #     plot_graph_no_isolated(G[S], graph_name, use_complement)
+    # end
 
-    greedy_verify(S, G, w)
-    # theta_verify(S, G, w, val, θ, ϵ)
+    # greedy_verify(S, G, w)
+    theta_verify(S, G, w, val, θ, ϵ)
 end
 
 
 # function primal_discard(S, X, ϵ=1e-6)
 #     return filter(n -> X[end, n] > ϵ, S)
 # end
+
 
 # for each vertex in S, pick it and then greedily pick subsequent vertices, and check the weight of the resulting stable set
 function greedy_verify(S, G, w)
@@ -195,7 +204,8 @@ function manual_verify(S, G, w, order=[])
     println("Finished with picking order ", order, " Final weight: ", w' * xr)
 end
 
-function single_discard(S, val, w, ϵ, verbose=true)
+
+function vertex_value_discard(S, val, w, ϵ, verbose=true)
     T = copy(S)
     for v in T
         val_v = val([v])
@@ -210,7 +220,7 @@ function single_discard(S, val, w, ϵ, verbose=true)
 end
 
 
-function iterative_discard(S, G, θ, val, w, ϵ, current_weight=0, verbose=true)
+function set_value_discard(S, G, θ, val, w, ϵ, current_weight=0, verbose=true)
     T = copy(S)
     for v in T
         val_v_c = val(del(G, T, v))
@@ -230,7 +240,7 @@ function fixed_point_discard(S, G, θ, val, w, ϵ, current_weight=0, verbose=tru
     current_size = length(S)
     iter = 1
     while !terminate
-        S = iterative_discard(S, G, θ, val, w, ϵ, current_weight, verbose)
+        S = set_value_discard(S, G, θ, val, w, ϵ, current_weight, verbose)
         if length(S) == current_size
             terminate = true
         end
@@ -240,84 +250,3 @@ function fixed_point_discard(S, G, θ, val, w, ϵ, current_weight=0, verbose=tru
     end
     return S
 end
-
-
-function load_dimacs_graph(graph_name, use_complement=true)
-    A = mmread("../dat/" * graph_name * ".mtx")
-    if use_complement
-        G = complement(SimpleGraph(A))  # the original DIMACS graphs are test cases for max clique problem, so use the complement
-    else
-        G = SimpleGraph(A)
-    end
-    return G
-end
-
-# chordal, petersen
-function load_family_graph(graph_name, family, use_complement=false)
-    A = readdlm("../dat/" * family * "/" * graph_name * ".txt")
-    if use_complement
-        G = complement(SimpleGraph(A))  # the complement of chordal/perfect graph is also perfect
-    else
-        G = SimpleGraph(A)
-    end
-    return G
-end
-
-function generate_family_graph(family, n, use_complement=false)
-    if family == "wheel"
-        graph_name = "wheel-" * string(n)
-        G = wheel_graph(n)
-    elseif family == "hole"
-        graph_name = "hole-" * string(n)
-        G = cycle_graph(n)
-    end
-    if use_complement
-        G = complement(G)
-    end
-    return G, graph_name
-end
-
-
-#-----------------------------------------
-# using MatrixMarket
-# use_complement = true
-# graph_name = "hamming8-2"
-# G = load_dimacs_graph(graph_name, use_complement)
-
-using DelimitedFiles
-use_complement = true
-graph_name = "pruned-100-4"
-family = "chordal"
-G = load_family_graph(graph_name, family, use_complement)
-
-# use_complement = false
-# G, graph_name = generate_family_graph("hole", 6, use_complement)
-
-n = nv(G)
-println(n)
-println(ne(G))
-E = collect(edges(G))
-
-# Weight Vector
-w = ones(n)
-
-# Solve SDP
-@time sol = dualSDP(E, w, "SCS", false)
-println("SDP Value: ", sol.value)
-# println("Eigvals: ", last(eigvals(sol.X), 3))
-
-# Value fun & rounding
-val = valfun(Matrix(sol.Q))  # convert SparseMatrix to Matrix
-
-# println("round_valfun begins")
-# xr = round_valfun(G, w, val, sol.value)
-# println(findall(xr))
-# println("Rounded Value: ", w' * xr)
-
-
-# println("tabu_valfun begins")
-# xt = tabu_valfun(G, w, val, sol.value, 1e-3)
-# println(findall(xt))
-# println("Rounded Value: ", w' * xt)
-
-perfect_tabu_valfun_verify_I(G, w, val, sol.value, 1e-3, graph_name, use_complement)
