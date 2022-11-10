@@ -5,50 +5,49 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ bd3af3ca-f0e9-4e29-b4bb-4008874e0975
-using JuMP, MosekTools, SCS, COSMO, COPT
+using JuMP
 
-# ╔═╡ 513b9a57-66e0-4bb4-9234-da50035aa23e
-using Graphs, Combinatorics
+# ╔═╡ 24495eb7-4b82-4d14-bb8e-208dedd62841
+using COPT
 
-# ╔═╡ c07e0bcc-927b-432c-a43a-b0fcfe192c4c
-using StatsBase
+# ╔═╡ a7335097-387f-479f-8930-bd3c06062d1e
+using SCS
 
-# ╔═╡ bf5105c8-9932-46de-8a1d-f6493606465e
-include("src/valfun.jl")
+# ╔═╡ cb6df155-808f-4ad2-91db-c98b3a277d94
+subsets = collect(powerset(S))
 
-# ╔═╡ 916b5b87-8cc6-4665-8d68-bfd2450eb15e
-model = Model(optimizer_with_attributes(COPT.Optimizer))
+# ╔═╡ c7157aad-1fe6-493b-b6c3-8214be0d9329
+filter(s -> i ∈ s, subsets)
 
-# ╔═╡ 2c31896a-ca88-4ea9-974f-2c0d8605c973
-G = path_graph(5)
+# ╔═╡ 0c10ebdc-f411-4088-8874-4eb6a54d7893
+model = Model(SCS.Optimizer)
 
-# ╔═╡ 58f05828-e611-4111-8f66-20e0b848ab06
-val, _ = get_valfun(G, ones(5))
+# ╔═╡ 658c355c-266a-4816-a4b7-b51145a58bfe
+@variable(model, x[subsets] >= 0)
 
-# ╔═╡ cdf145d2-a2fe-4bec-af04-0cb922256e18
-val([1,2,3])
+# ╔═╡ c7fef90a-9b24-4782-9b1e-69ab703fbf68
+
+
+# ╔═╡ e90fca62-74f3-4b0c-92d7-eb293dfe7658
+optimize!(model)
+
+# ╔═╡ 518cd3c5-e872-4bff-86eb-d27dafa976ee
+value(objective_function(model))
+
+# ╔═╡ 1e0633b3-6c76-4025-a9b0-5f4fcefbf250
+[sqrt(S[i] * S[j]) for i in S, j in S]
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 COPT = "227a2e2d-e949-4d8e-a1da-7384fe6f0b9f"
-COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
-Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
-Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
-MosekTools = "1ec41992-ff65-5c91-ac43-2df89e9693a4"
 SCS = "c946c3f1-0d1f-5ce8-9dea-7daa1f7e2d13"
-StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 COPT = "~1.0.5"
-COSMO = "~0.8.6"
-Combinatorics = "~1.0.2"
-Graphs = "~1.7.4"
 JuMP = "~1.3.1"
-MosekTools = "~0.13.1"
 SCS = "~1.1.2"
-StatsBase = "~0.33.21"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -58,20 +57,8 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 julia_version = "1.7.3"
 manifest_format = "2.0"
 
-[[deps.AMD]]
-deps = ["Libdl", "LinearAlgebra", "SparseArrays", "Test"]
-git-tree-sha1 = "00163dc02b882ca5ec032400b919e5f5011dbd31"
-uuid = "14f7f29c-3bd6-536c-9a0b-7339e30b5a3e"
-version = "0.5.0"
-
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
-
-[[deps.ArnoldiMethod]]
-deps = ["LinearAlgebra", "Random", "StaticArrays"]
-git-tree-sha1 = "62e51b39331de8911e4a7ff6f5aaf38a5f4cc0ae"
-uuid = "ec485272-7323-5ecc-a04f-4719b315124d"
-version = "0.2.0"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -97,18 +84,6 @@ git-tree-sha1 = "ba7e689cf0e66b408f8059958a0e2652dd8a1cd6"
 uuid = "227a2e2d-e949-4d8e-a1da-7384fe6f0b9f"
 version = "1.0.5"
 
-[[deps.COSMO]]
-deps = ["AMD", "COSMOAccelerators", "DataStructures", "IterTools", "LinearAlgebra", "MathOptInterface", "Pkg", "Printf", "QDLDL", "Random", "Reexport", "Requires", "SparseArrays", "Statistics", "SuiteSparse", "Test", "UnsafeArrays"]
-git-tree-sha1 = "fc2f86234831163a6a29f70f083f15e1eb941859"
-uuid = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
-version = "0.8.6"
-
-[[deps.COSMOAccelerators]]
-deps = ["LinearAlgebra", "Random", "SparseArrays", "Test"]
-git-tree-sha1 = "b1153b40dd95f856e379f25ae335755ecc24298e"
-uuid = "bbd8fffe-5ad0-4d78-a55e-85575421b4ac"
-version = "0.1.0"
-
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "e7ff6cadf743c098e08fca25c91103ee4303c9bb"
@@ -133,11 +108,6 @@ git-tree-sha1 = "ded953804d019afa9a3f98981d99b33e3db7b6da"
 uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
 version = "0.7.0"
 
-[[deps.Combinatorics]]
-git-tree-sha1 = "08c8b6831dc00bfea825826be0bc8336fc369860"
-uuid = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
-version = "1.0.2"
-
 [[deps.CommonSubexpressions]]
 deps = ["MacroTools", "Test"]
 git-tree-sha1 = "7b8a93dba8af7e3b42fecabf646260105ac373f7"
@@ -153,11 +123,6 @@ version = "4.3.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-
-[[deps.DataAPI]]
-git-tree-sha1 = "46d2680e618f8abd007bce0c3026cb0c4a8f2032"
-uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
-version = "1.12.0"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
@@ -181,10 +146,6 @@ git-tree-sha1 = "992a23afdb109d0d2f8802a30cf5ae4b1fe7ea68"
 uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
 version = "1.11.1"
 
-[[deps.Distributed]]
-deps = ["Random", "Serialization", "Sockets"]
-uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
-
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
 git-tree-sha1 = "5158c2b41018c5f7eb1470d558127ac274eca0c9"
@@ -204,17 +165,6 @@ git-tree-sha1 = "187198a4ed8ccd7b5d99c41b69c679269ea2b2d4"
 uuid = "f6369f11-7733-5829-9624-2563aa707210"
 version = "0.10.32"
 
-[[deps.Graphs]]
-deps = ["ArnoldiMethod", "Compat", "DataStructures", "Distributed", "Inflate", "LinearAlgebra", "Random", "SharedArrays", "SimpleTraits", "SparseArrays", "Statistics"]
-git-tree-sha1 = "ba2d094a88b6b287bd25cfa86f301e7693ffae2f"
-uuid = "86223c79-3864-5bf0-83f7-82e725a168b6"
-version = "1.7.4"
-
-[[deps.Inflate]]
-git-tree-sha1 = "5cd07aab533df5170988219191dfad0519391428"
-uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
-version = "0.1.3"
-
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -229,11 +179,6 @@ version = "0.1.8"
 git-tree-sha1 = "7fd44fd4ff43fc60815f8e764c0f352b83c49151"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
 version = "0.1.1"
-
-[[deps.IterTools]]
-git-tree-sha1 = "fa6287a4469f5e048d763df38279ee729fbd44e5"
-uuid = "c8e1da08-722c-5040-9ed9-7db0dc04731e"
-version = "1.4.0"
 
 [[deps.JLLWrappers]]
 deps = ["Preferences"]
@@ -309,26 +254,8 @@ version = "1.8.2"
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
 
-[[deps.Missings]]
-deps = ["DataAPI"]
-git-tree-sha1 = "bf210ce90b6c9eed32d25dbcae1ebc565df2687f"
-uuid = "e1d29d7a-bbdc-5cf2-9ac0-f12de2c33e28"
-version = "1.0.2"
-
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
-
-[[deps.Mosek]]
-deps = ["Libdl", "Pkg", "Printf", "SparseArrays"]
-git-tree-sha1 = "4d639c16d45bd7962613ff984046c120915d82b2"
-uuid = "6405355b-0ac2-5fba-af84-adbd65488c0e"
-version = "10.0.2"
-
-[[deps.MosekTools]]
-deps = ["MathOptInterface", "Mosek", "Printf"]
-git-tree-sha1 = "4331c9158074e7384563e33f3284efe232ef6a79"
-uuid = "1ec41992-ff65-5c91-ac43-2df89e9693a4"
-version = "0.13.1"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
@@ -397,12 +324,6 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 deps = ["Printf"]
 uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 
-[[deps.QDLDL]]
-deps = ["AMD", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "aa1a32b0917794199aeeb15d6fba46ca02450306"
-uuid = "bfc457fd-c171-5ab7-bd9e-d5dbfc242d63"
-version = "0.2.1"
-
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
@@ -410,11 +331,6 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 [[deps.Random]]
 deps = ["SHA", "Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-
-[[deps.Reexport]]
-git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
-uuid = "189a3867-3050-52da-a836-e630ba90ab69"
-version = "1.2.2"
 
 [[deps.Requires]]
 deps = ["UUIDs"]
@@ -446,24 +362,8 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
-[[deps.SharedArrays]]
-deps = ["Distributed", "Mmap", "Random", "Serialization"]
-uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
-
-[[deps.SimpleTraits]]
-deps = ["InteractiveUtils", "MacroTools"]
-git-tree-sha1 = "5d7e3f4e11935503d3ecaf7186eac40602e7d231"
-uuid = "699a6c99-e7fa-54fc-8d76-47d257e15c1d"
-version = "0.9.4"
-
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
-
-[[deps.SortingAlgorithms]]
-deps = ["DataStructures"]
-git-tree-sha1 = "b3363d7460f7d098ca0912c69b082f75625d7508"
-uuid = "a2af1166-a08f-5f64-846c-94a0d3cef48c"
-version = "1.0.1"
 
 [[deps.SparseArrays]]
 deps = ["LinearAlgebra", "Random"]
@@ -490,22 +390,6 @@ version = "1.4.0"
 deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
-[[deps.StatsAPI]]
-deps = ["LinearAlgebra"]
-git-tree-sha1 = "f9af7f195fb13589dd2e2d57fdb401717d2eb1f6"
-uuid = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
-version = "1.5.0"
-
-[[deps.StatsBase]]
-deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "d1bf48bfcc554a3761a133fe3a9bb01488e06916"
-uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-version = "0.33.21"
-
-[[deps.SuiteSparse]]
-deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
-uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
-
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
@@ -531,11 +415,6 @@ uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
-[[deps.UnsafeArrays]]
-git-tree-sha1 = "3350f94f6caa02f324a23645bf524fc9334c7488"
-uuid = "c4a57d5a-5b31-53a6-b365-19f8c011fbd6"
-version = "1.0.4"
-
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
@@ -555,12 +434,13 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 
 # ╔═╡ Cell order:
 # ╠═bd3af3ca-f0e9-4e29-b4bb-4008874e0975
-# ╠═513b9a57-66e0-4bb4-9234-da50035aa23e
-# ╠═c07e0bcc-927b-432c-a43a-b0fcfe192c4c
-# ╠═bf5105c8-9932-46de-8a1d-f6493606465e
-# ╠═916b5b87-8cc6-4665-8d68-bfd2450eb15e
-# ╠═2c31896a-ca88-4ea9-974f-2c0d8605c973
-# ╠═58f05828-e611-4111-8f66-20e0b848ab06
-# ╠═cdf145d2-a2fe-4bec-af04-0cb922256e18
+# ╠═24495eb7-4b82-4d14-bb8e-208dedd62841
+# ╠═a7335097-387f-479f-8930-bd3c06062d1e
+# ╠═0c10ebdc-f411-4088-8874-4eb6a54d7893
+# ╠═658c355c-266a-4816-a4b7-b51145a58bfe
+# ╠═c7fef90a-9b24-4782-9b1e-69ab703fbf68
+# ╠═e90fca62-74f3-4b0c-92d7-eb293dfe7658
+# ╠═518cd3c5-e872-4bff-86eb-d27dafa976ee
+# ╠═1e0633b3-6c76-4025-a9b0-5f4fcefbf250
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

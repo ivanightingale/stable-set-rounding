@@ -1,6 +1,6 @@
 using Combinatorics
 using LinearAlgebra
-using JuMP, SCS, MosekTools
+using JuMP, SCS, MosekTools, COPT
 
 include("graph_utils.jl")
 include("valfun.jl")
@@ -59,31 +59,52 @@ function find_bad_val_w(G)
     n = nv(G)
     N = collect(1:n)
 
-    model = Model(optimizer_with_attributes(SCS.Optimizer, "verbose" => false, "eps_rel" => 1e-7, "eps_abs" => 1e-7))
+    model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => false))
     subsets = collect(powerset(N))
     @variable(model, v[subsets] >= 0)
     @variable(model, w[1:n] >= 1)
-    for s in subsets
-        for i in s
-            @constraint(model, v[s] - v[del_lp(G, s, i)] >= w[i])
+    for s in powerset(N, 1)
+        # for i in s
+        #     @constraint(model, v[s] - v[del_lp(G, s, i)] >= w[i])
+        # end
+        for i in setdiff(N, s)
+            @constraint(model, v[s] <= v[sort(vcat(s, [i]))])
         end
     end
+    for s in powerset(N, 1, floor(Int64, n/2))
+        disconnected_vertices = del_set(G, N, s)
+        for t in powerset(setdiff(N, s), 1)
+            if issubset(t, disconnected_vertices)
+                @constraint(model, v[s] + v[t] == v[sort(vcat(s, t))])
+            # else
+            #     @constraint(model, v[s] + v[t] >= v[sort(vcat(s, t))])
+            end
+        end
+    end
+
     for i in N
         @constraint(model, v[N] - v[del_lp(G, N, i)] == w[i])
-        @constraint(model, v[[i]] == w[i])
+        @constraint(model, v[[i]] >= w[i])
     end
+    @constraint(model, v[Int64[]] == 0)
     @objective(model, Min, v[N])
-
+    println("Optimizing...")
     optimize!(model)
+    println(solution_summary(model))
+    if termination_status(model) != MOI.OPTIMAL
+        return nothing, nothing
+    end
 
     w_val = value.(w)
+    bad_val = (S) -> value(v[S])
     println(w_val)
+    # print_valfun(bad_val, n)
     θ = lovasz_sdp(G, value.(w))
     println("The theta value is ", θ, ", and val(N) is ", value(v[N]))
 
     # greedy_verify(N, G, value.(w))
-    theta_verify(N, G, value.(w), (S) -> value(v[S]), θ, 1e-3)
-    return w_val
+    theta_verify(N, G, value.(w), bad_val, θ, 1e-3, "SCS")
+    return bad_val, w_val
 end
 
 
@@ -93,6 +114,7 @@ function lovasz_sdp(G, w)
     W = [sqrt(w[i] * w[j]) for i in V, j in V]
 
     model = Model(optimizer_with_attributes(SCS.Optimizer, "verbose" => false, "eps_rel" => 1e-7, "eps_abs" => 1e-7))
+    # model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => false))
     @variable(model, Z[1:n, 1:n]);
     @constraint(model, Z ∈ PSDCone());
     @constraint(model, tr(Z) == 1.);
@@ -114,15 +136,21 @@ function del_lp(G,S,i)
     return s_del
 end
 
+function del_set(G, S, vertices)
+    s_del = setdiff(S, union([neighbors(G,i) for i in vertices]..., vertices))
+    if s_del == []
+        s_del = Int64[]
+    end
+    return s_del
+end
+
 #-----------------------------------------
-using DelimitedFiles
-use_complement = true
-graph_name = "connecting-15-1.0-5"
+use_complement = false
+graph_name = "connecting-15-1.0-1"
 family = "chordal"
 G = load_family_graph(graph_name, family, use_complement)
 
-# use_complement = false
-# G, graph_name = generate_family_graph("hole", 6, use_complement)
+# plot_graph(G, graph_name, use_complement)
 
 n = nv(G)
 println(n)
@@ -133,6 +161,13 @@ println(ne(G))
 
 # find_bad_val_rand(G)
 
-bad_w = find_bad_val_w(G)
-val, θ = get_valfun(G, bad_w)
-perfect_tabu_valfun_verify_I(G, bad_w, val, θ, 1e-3)
+bad_val, bad_w = find_bad_val_w(G)
+# val, θ = get_valfun(G, bad_w)
+# print_valfun(val, n)
+# perfect_tabu_valfun_verify_I(G, bad_w, val, θ, 1e-3)
+
+# verify_subadditivity(G, bad_val, 1e-6)
+# verify_subadditivity(G, val, 1e-6)
+
+# verify_neighbor_property(G, bad_val, bad_w, 1e-4)
+# verify_neighbor_property(G, val, bad_w, 1e-4)

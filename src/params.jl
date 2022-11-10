@@ -1,7 +1,7 @@
 using MatrixMarket
 using Graphs
 
-graph_file = "san200-0-7-1.mtx";
+graph_file = "hamming6-2.mtx";
 
 function load_graph()
 	A = mmread("../dat/" * graph_file)

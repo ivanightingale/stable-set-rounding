@@ -1,26 +1,19 @@
-using JuMP, SCS, COSMO, MosekTools
+using JuMP, SCS, COSMO, MosekTools, COPT
 using LinearAlgebra, SparseArrays
 using Combinatorics
 using Graphs
 
-include("graph_utils.jl")
+include("opt_utils.jl")
 
 # Solve dual SDP
-function dualSDP(E, w, solver, verbose=true)
+function dualSDP(E, w, solver; ϵ=1e-7, verbose=false)
     n = length(w)
     i0 = n + 1
-    ϵ = 1e-7
-    if solver == "COSMO"
-        model = Model(optimizer_with_attributes(COSMO.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ, "decompose" => true, "max_iter" => 1000000, "verbose" => verbose))  # for larger graphs
-    elseif solver == "SCS"
-        model = Model(optimizer_with_attributes(SCS.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ, "max_iters" => 1000000, "verbose" => verbose))
-    else
-        model = Model(optimizer_with_attributes(Mosek.Optimizer, "QUIET" => !verbose))
-    end
+    model = theta_sdp_model(solver=solver, verbose=verbose)
     @variable(model, t)
     @variable(model, λ[1:n])
     @variable(model, Λ[1:length(E)])  # vector of lambda_ij
-    Q = Symmetric(sparse([src(e) for e in E],[dst(e) for e in E], Λ, i0, i0) + sparse(collect(1:n), fill(i0, n), -λ, i0, i0)) * 0.5 + sparse(collect(1:n), collect(1:n), λ, i0, i0) - Diagonal([w; 0])
+    Q = Symmetric(sparse([src(e) for e in E], [dst(e) for e in E], Λ, i0, i0) + sparse(collect(1:n), fill(i0, n), -λ, i0, i0)) * 0.5 + sparse(collect(1:n), collect(1:n), λ, i0, i0) - Diagonal([w; 0])
     Q[i0, i0] = t
     @constraint(model, X, Q in PSDCone())
     @objective(model, Min, t)
@@ -35,27 +28,55 @@ function dualSDP(E, w, solver, verbose=true)
 end
 
 # Value funciton approximation
-function valfun(Q)
-    tol = 1e-6
+# use value of the PSD matrix in the dual SDP to obtain a value function
+function valfun(Q, tol=1e-7)
     n = size(Q,1)-1
     i0 = n+1
-    # A = Symmetric(Q[1:n,1:n])
-    A = Q[1:n,1:n]
-    b = Q[1:n,i0]
+    A = Symmetric(Q[1:n,1:n])
+    b = Q[1:n, i0]
     return S -> b[S]' * pinv(A[S,S],rtol=tol) * b[S]  # pinv probably takes a significant portion of time. The pinv of sparse matrix is often dense. Can we do something else?
-    # TODO: solve the SDP explicitly
+end
+
+# More accurate value function via SDP
+# use value of the PSD matrix in the dual SDP, and solve an SDP on its submatrix
+# to obtain a value function
+function valfun_sdp(Q, solver="SCS")
+    n = size(Q,1)-1
+    i0 = n+1
+    A = Symmetric(Q[1:n,1:n])
+    b = Q[1:n, i0]
+    val = S -> begin
+        model = theta_sdp_model(solver=solver)
+        @variable(model, t)
+        Q_I = vcat(hcat(t, b[S]'), hcat(b[S], A[S,S]))
+        @constraint(model, Q_I in PSDCone())
+        @objective(model, Min, t)
+        optimize!(model)
+        value(t)
+    end
+    return val
+end
+
+function get_valfun(G, w; solver="SCS", verbose=false)
+    E = collect(edges(G))
+    sol = dualSDP(E, w, solver, verbose=verbose)
+    println("SDP Value: ", sol.value)
+    # println("Eigvals: ", last(eigvals(sol.X), 3))
+    # use value of the PSD matrix in the dual SDP to obtain a value function
+    val = valfun(Matrix(sol.Q))
+    # val = valfun_sdp(Matrix(sol.Q), solver)
+    return val, sol.value
 end
 
 del = (G,S,i) -> setdiff(S, vcat(neighbors(G,i), [i]))
 
-function get_valfun(G, w, solver="SCS", verbose=false)
-    E = collect(edges(G))
-    # @time sol = dualSDP(E, w, "SCS", false)
-    sol = dualSDP(E, w, solver, verbose)
-    println("SDP Value: ", sol.value)
-    # println("Eigvals: ", last(eigvals(sol.X), 3))
-    val = valfun(Matrix(sol.Q))  # convert SparseMatrix to Matrix
-    return val, sol.value
+
+function print_valfun(val, n)
+    subsets = powerset(1:n)
+    for s in subsets
+        # println(s, " ", val(s))
+        println(val(s))
+    end
 end
 
 # rounding based on value function, a heuristics for general graphs
@@ -77,7 +98,7 @@ end
 
 # iteratively apply discard rules and pick the first candidate for imperfect graphs
 # TODO: make it work for the remaining cases
-function tabu_valfun_imperfect(G, w, val, θ, ϵ=1e-6)
+function tabu_valfun_quasiperfect(G, w, val, θ, ϵ=1e-6)
     n = length(w)
     S = collect(1:n)
     xr = falses(n)
@@ -133,8 +154,8 @@ function perfect_tabu_valfun_verify_I(G, w, val, θ, ϵ, graph_name=nothing, use
     #     plot_graph_no_isolated(G[S], graph_name, use_complement)
     # end
 
-    # greedy_verify(S, G, w)
-    theta_verify(S, G, w, val, θ, ϵ)
+    greedy_verify(S, G, w)
+    # theta_verify(S, G, w, val, θ, ϵ)
 end
 
 
@@ -162,8 +183,8 @@ function greedy_verify(S, G, w)
     end
 end
 
-# for each vertex in S, pick it and explicitly compute the theta value of the remaining subgraph
-function theta_verify(S, G, w, val, θ, ϵ)
+# for each vertex in S, pick it and compute the theta value of the remaining subgraph
+function theta_verify(S, G, w, val, θ, ϵ, solver="SCS")
     n = length(w)
     xr = falses(n)
     T = copy(S)
@@ -171,7 +192,8 @@ function theta_verify(S, G, w, val, θ, ϵ)
         xr[first_v] = true
         S = del(G, S, first_v)
         E = collect(edges(G[S]))
-        sol = dualSDP(E, w[S], "SCS", false)
+        # compute theta on the subgraph G[S]
+        sol = dualSDP(E, w[S], solver, verbose=false)
         val_S = val(S)
         println("Original theta: ", θ, ". Value function when ", string(first_v), " with weight ", w[first_v], " is picked: ", val_S, "; new theta value: ", sol.value)
         if abs(val_S - sol.value) > ϵ || abs(θ - sol.value) > w[first_v] + ϵ
@@ -249,4 +271,67 @@ function fixed_point_discard(S, G, θ, val, w, ϵ, current_weight=0, verbose=tru
         iter += 1
     end
     return S
+end
+
+function verify_subadditivity(G, val, ϵ=1e-4)
+    println("Verifying subadditivity...")
+    n = nv(G)
+    N = 1:n
+    for s in powerset(N, 1, floor(Int64, n/2))
+        for t in powerset(setdiff(N, s), 1)
+            if(val(s) + val(t) < val(sort(vcat(s, t))) - ϵ)
+                println("Warning! Value of ", s, " is ", val(s), ", value of ", t, " is ", val(t), "; value of union is ", val(sort(vcat(s,t))), ". The difference is ", val(sort(vcat(s, t))) - val(s) - val(t) )
+                break
+            end
+        end
+    end
+end
+
+# function verify_neighbor_property(G, val, w, ϵ=1e-3)
+#     println("Verifying neighbor property...")
+#     for i in 1:nv(G)
+#         val_i_neighbors = val(sort(vcat([i], neighbors(G, i))))
+#         val_neighbors = val(neighbors(G, i))
+#         if(abs(val_i_neighbors - max(w[i], val_neighbors)) > ϵ)
+#             println("Warning! Value of ", i, " and neighbors is ", val_i_neighbors, "; value of neighbors of ", i, " is ", val_neighbors, ", and weight of ", i, " is ", w[i])
+#         end
+#     end
+# end
+
+function dualSDP_test(E, w, solver; ϵ=1e-7, verbose=false, t_bound=0, test_negative=false, test_nonnegativity=false)
+    n = length(w)
+    i0 = n + 1
+    model = theta_sdp_model(solver=solver, verbose=verbose)
+    @variable(model, t)
+    @variable(model, λ[1:n])
+    @variable(model, Λ[1:length(E)])  # vector of lambda_ij
+    Q = Symmetric(sparse([src(e) for e in E], [dst(e) for e in E], Λ, i0, i0) + sparse(collect(1:n), fill(i0, n), -λ, i0, i0)) * 0.5 + sparse(collect(1:n), collect(1:n), λ, i0, i0) - Diagonal([w; 0])
+    Q[i0, i0] = t
+    @constraint(model, X, Q in PSDCone())
+    if t_bound > 0
+        @constraint(model, t >= t_bound)
+    else
+        @objective(model, Min, t)
+    end
+
+    if test_negative
+        @constraint(model, Λ[1] <= -0.1)
+        @constraint(model, Λ[2] <= -0.1)
+    end
+
+    if test_nonnegativity
+        @constraint(model, Λ .>= 0)
+    end
+
+    optimize!(model)
+    X_r = Symmetric(dual.(X))
+    val_r = value(t)
+    lam_r = value.(λ)
+    Lam_r = value.(Λ)
+    Q_r = Symmetric(value.(Q))
+
+    println(max(Lam_r...))
+    println(all(Lam_r .>= -1e-3))
+    println(Lam_r[Lam_r .< -1e-3])
+    return (X=X_r, Q=Q_r, value=val_r, lam=lam_r, Lam=Lam_r)
 end

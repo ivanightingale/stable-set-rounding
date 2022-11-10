@@ -1,6 +1,7 @@
+using GraphPlot, Compose, Colors
 using Cairo, Fontconfig
 using Graphs
-using GraphPlot, Compose, Colors
+using MatrixMarket, DelimitedFiles
 
 
 # chordal, petersen
@@ -61,5 +62,20 @@ function plot_graph_no_isolated(G, graph_name, use_complement)
         draw(PNG(image_file, 100cm, 100cm), gplot(G_no_isolated, NODESIZE=0.05/sqrt(nv(G_no_isolated)), layout=spring_layout, nodefillc=nodecolor[bipartite_map(G_no_isolated)]))
     else
         draw(PNG(image_file, 100cm, 100cm), gplot(G_no_isolated, NODESIZE=0.05/sqrt(nv(G_no_isolated)), layout=spring_layout))
+    end
+end
+
+function plot_graph(G, graph_name, use_complement)
+    if use_complement
+        image_file = "../images/" * graph_name * "_co_orig.png"
+    else
+        image_file = "../images/" * graph_name * "_orig.png"
+    end
+
+    if is_bipartite(G)
+        nodecolor = [colorant"lightseagreen", colorant"orange"]
+        draw(PNG(image_file, 100cm, 100cm), gplot(G, NODESIZE=0.05/sqrt(nv(G)), layout=spring_layout, nodefillc=nodecolor[bipartite_map(G)]))
+    else
+        draw(PNG(image_file, 100cm, 100cm), gplot(G, NODESIZE=0.05/sqrt(nv(G)), layout=spring_layout, nodelabel=1:nv(G)))
     end
 end

@@ -1,15 +1,16 @@
 using Graphs
 using StatsBase
-using JuMP, SCS, COSMO, MosekTools
+using JuMP, SCS, COSMO, MosekTools, COPT
 
-function theta_sdp_model(solver="SCS")
-    if solver == "SCS"
-	       # return Model(optimizer_with_attributes(SCS.Optimizer, "verbose" => false, "eps_abs" => 1e-6, "eps_rel" => 1e-6))
-           return Model(optimizer_with_attributes(SCS.Optimizer, "verbose" => false, "eps_rel" => 1e-7, "eps_abs" => 1e-7))
-    elseif solver == "COSMO"
-        return Model(optimizer_with_attributes(COSMO.Optimizer, "verbose" => true, "eps_abs" => 1e-6, "eps_rel" => 1e-6, "decompose"=> true))  # TODO: why no decomposition?
+function theta_sdp_model(;solver="SCS", ϵ=1e-7, verbose=false)
+    if solver == "COSMO"
+        model = Model(optimizer_with_attributes(COSMO.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ, "decompose" => true, "max_iter" => 1000000, "verbose" => verbose))  # for larger graphs
+    elseif solver == "SCS"
+        model = Model(optimizer_with_attributes(SCS.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ, "max_iters" => 1000000, "verbose" => verbose))
     elseif solver == "Mosek"
-        return Model(optimizer_with_attributes(Mosek.Optimizer, "QUIET" => true))  # TODO: why no decomposition?
+        model = Model(optimizer_with_attributes(Mosek.Optimizer, "QUIET" => !verbose))
+    else
+        model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => verbose))
     end
 end
 
