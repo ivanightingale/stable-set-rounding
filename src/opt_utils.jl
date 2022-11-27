@@ -1,6 +1,6 @@
 using Graphs
 using StatsBase
-using JuMP, SCS, COSMO, MosekTools, COPT
+using JuMP, SCS, COSMO, MosekTools
 
 function theta_sdp_model(;solver="SCS", ϵ=1e-7, verbose=false)
     if solver == "COSMO"
@@ -8,9 +8,7 @@ function theta_sdp_model(;solver="SCS", ϵ=1e-7, verbose=false)
     elseif solver == "SCS"
         model = Model(optimizer_with_attributes(SCS.Optimizer, "eps_abs" => ϵ, "eps_rel" => ϵ, "max_iters" => 1000000, "verbose" => verbose))
     elseif solver == "Mosek"
-        model = Model(optimizer_with_attributes(Mosek.Optimizer, "QUIET" => !verbose))
-    else
-        model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => verbose))
+        model = Model(optimizer_with_attributes(Mosek.Optimizer, "QUIET" => !verbose, "MSK_DPAR_INTPNT_CO_TOL_REL_GAP" => ϵ, "MSK_DPAR_INTPNT_CO_TOL_MU_RED" => ϵ))
     end
 end
 

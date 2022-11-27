@@ -1,15 +1,16 @@
-using JuMP, SCS, COSMO, MosekTools, COPT
+using JuMP, SCS, COSMO, MosekTools
 using LinearAlgebra, SparseArrays
 using Combinatorics
 using Graphs
 
 include("opt_utils.jl")
+include("graph_utils.jl")
 
 # Solve dual SDP
-function dualSDP(E, w, solver; ϵ=1e-7, verbose=false)
+function dualSDP(E, w; solver="SCS", ϵ=1e-7, verbose=false)
     n = length(w)
     i0 = n + 1
-    model = theta_sdp_model(solver=solver, verbose=verbose)
+    model = theta_sdp_model(solver=solver, ϵ=ϵ, verbose=verbose)
     @variable(model, t)
     @variable(model, λ[1:n])
     @variable(model, Λ[1:length(E)])  # vector of lambda_ij
@@ -24,29 +25,35 @@ function dualSDP(E, w, solver; ϵ=1e-7, verbose=false)
     Lam_r = value.(Λ)
     Q_r = Symmetric(value.(Q))
     # println(eigmin(Matrix(Q_r)))
+
+    if verbose
+        println(max(Lam_r...))
+        println(all(Lam_r .>= -1e-3))
+        println(Lam_r[Lam_r .< -1e-3])
+    end
     return (X=X_r, Q=Q_r, value=val_r, lam=lam_r, Lam=Lam_r)
 end
 
 # Value funciton approximation
 # use value of the PSD matrix in the dual SDP to obtain a value function
-function valfun(Q, tol=1e-7)
+function valfun(Q; ϵ=1e-8)
     n = size(Q,1)-1
     i0 = n+1
     A = Symmetric(Q[1:n,1:n])
     b = Q[1:n, i0]
-    return S -> b[S]' * pinv(A[S,S],rtol=tol) * b[S]  # pinv probably takes a significant portion of time. The pinv of sparse matrix is often dense. Can we do something else?
+    return S -> b[S]' * pinv(A[S,S],rtol=ϵ) * b[S]  # pinv probably takes a significant portion of time. The pinv of sparse matrix is often dense. Can we do something else?
 end
 
 # More accurate value function via SDP
 # use value of the PSD matrix in the dual SDP, and solve an SDP on its submatrix
 # to obtain a value function
-function valfun_sdp(Q, solver="SCS")
+function valfun_sdp(Q; solver="SCS", ϵ=1e-7)
     n = size(Q,1)-1
     i0 = n+1
     A = Symmetric(Q[1:n,1:n])
     b = Q[1:n, i0]
     val = S -> begin
-        model = theta_sdp_model(solver=solver)
+        model = theta_sdp_model(solver=solver, ϵ=ϵ)
         @variable(model, t)
         Q_I = vcat(hcat(t, b[S]'), hcat(b[S], A[S,S]))
         @constraint(model, Q_I in PSDCone())
@@ -57,156 +64,198 @@ function valfun_sdp(Q, solver="SCS")
     return val
 end
 
-function get_valfun(G, w; solver="SCS", verbose=false)
-    E = collect(edges(G))
-    sol = dualSDP(E, w, solver, verbose=verbose)
-    println("SDP Value: ", sol.value)
-    # println("Eigvals: ", last(eigvals(sol.X), 3))
-    # use value of the PSD matrix in the dual SDP to obtain a value function
-    val = valfun(Matrix(sol.Q))
-    # val = valfun_sdp(Matrix(sol.Q), solver)
-    return val, sol.value
+# More accurate value function via bisection
+# solve the submatrix SDP via bisection
+function valfun_bisect(sol; psd_ϵ=1e-8, bisect_ϵ=1e-10)
+    upperBound = sol.value
+    Q = Matrix(sol.Q)
+    n = size(Q, 1) - 1
+    i0 = n + 1
+    A = Symmetric(Q[1:n, 1:n])
+    b = Q[1:n, i0]
+    isPSD = (t, S) -> eigmin([t b[S]'; b[S] A[S,S]]) > -psd_ϵ
+    return S -> bisection(S, isPSD, 0, upperBound; ϵ=bisect_ϵ)
 end
 
+function bisection(S, condition, t0, t1; ϵ=1e-10)
+    t = (t0 + t1)/2
+    if t1 - t0 < ϵ
+        return t
+    end
+    if condition(t, S)
+        bisection(S, condition, t0, t)
+    else
+        bisection(S, condition, t, t1)
+    end
+end
+
+
 del = (G,S,i) -> setdiff(S, vcat(neighbors(G,i), [i]))
+del! = (G,S,i) -> setdiff!(S, vcat(neighbors(G,i), [i]))
 
 
-function print_valfun(val, n)
-    subsets = powerset(1:n)
+function print_valfun(val, n, max_size=n)
+    subsets = powerset(1:n, 0, max_size)
     for s in subsets
-        # println(s, " ", val(s))
-        println(val(s))
+        println(s, " ", val(s))
     end
 end
 
 # rounding based on value function, a heuristics for general graphs
-function round_valfun(G, w, val, θ)
-    n = length(w)
+function round_valfun(G, w, θ, val)
+    n = nv(G)
     S = collect(1:n)
-    xr = falses(n)
+    x_stable = falses(n)
 
     while length(S) > 0
         idx = argmax(w[j] + val(del(G,S,j)) for j in S)
         j = S[idx]
-        xr[j] = 1
-        S = del(G,S,j)
-        println("Current weight: ", w' * xr)
+        x_stable[j] = 1
+        del!(G, S, j)
+        println("Current weight: ", w' * x_stable)
     end
-    return xr
+    return x_stable
 end
 
-
-# iteratively apply discard rules and pick the first candidate for imperfect graphs
-# TODO: make it work for the remaining cases
-function tabu_valfun_quasiperfect(G, w, val, θ, ϵ=1e-6)
-    n = length(w)
+# using value function to iteratively discard and pick vertices to form a stable
+# set
+function tabu_valfun(G, w, θ, val; max_rounds=nv(G), ϵ=1e-4, verbose=true)
+    n = nv(G)
     S = collect(1:n)
-    xr = falses(n)
+    x_stable = falses(n)
     current_weight = 0
-
-    S = vertex_value_discard(S, val, w, ϵ)
-
-    while !isempty(S)
-        S = fixed_point_discard(S, G, θ, val, w, ϵ, current_weight)
+    vertex_value_discard!(w, val, S; ϵ=ϵ, verbose=verbose)
+    for i in 1:max_rounds
+        fixed_point_discard!(G, w, θ, val, S, current_weight; ϵ, verbose)
         if !isempty(S)
-            v = S[1]  # pick a vertex in the remaining candidates
-            xr[v] = true
-            S = del(G, S, v)  # this ensures the final output is a stable set
-            current_weight = w' * xr
-            println("Current weight: ", current_weight)
+            pick_vertex!(G, S, x_stable)
+            current_weight = w' * x_stable
+            if verbose
+                println("Current weight: ", current_weight)
+                println("Remaining value: ", val(S))
+            end
+        else
+            break
         end
     end
-    return xr
+    return x_stable, S
 end
 
 
-# for perfect graphs, apply a single round of elimination
-function tabu_valfun_perfect(G, w, val, θ, ϵ)
-    n = length(w)
-    S = collect(1:n)
-    xr = falses(n)
+# pick a vertex in S (update the boolean vector) and update S
+function pick_vertex!(G, S, x_stable; v_to_pick=S[1])
+    x_stable[v_to_pick] = true
+    del!(G, S, v_to_pick)
+end
 
-    S = vertex_value_discard(S, val, w, ϵ)
-    S = set_value_discard(S, G, θ, val, w, ϵ)
-    while !isempty(S)
-        v = S[1]  # pick a vertex in the remaining candidates
-        xr[v] = true
-        S = del(G, S, v)  # this ensures the final output is a stable set
-        current_weight = w' * xr
-        println("Current weight: ", current_weight)
+
+function vertex_value_discard!(w, val, S; ϵ=1e-6, verbose=true)
+    T = copy(S)
+    for v in T
+        val_v = val([v])
+        if w[v] < val_v - ϵ
+            setdiff!(S, v)
+            if verbose
+                println(v, " is discarded. Value: ", val_v)
+            end
+        end
     end
-    return xr
 end
 
 
-# for perfect graphs, verify that applying a single round of elimination results in the
-# candidate set I
-function perfect_tabu_valfun_verify_I(G, w, val, θ, ϵ, graph_name=nothing, use_complement=nothing)
-    n = length(w)
-    S = collect(1:n)
-    xr = falses(n)
+function set_value_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbose=true)
+    T = copy(S)
+    for v in T
+        val_v_c = val(del(G, T, v))
+        if w[v] + val_v_c < θ - current_weight - ϵ
+            setdiff!(S, v)
+            if verbose
+                println(v, " is discarded. Value of LHS: ", w[v] + val_v_c, "; value of RHS: ", θ - current_weight)
+            end
+        end
+    end
+end
 
-    S = vertex_value_discard(S, val, w, ϵ)
-    S = set_value_discard(S, G, θ, val, w, ϵ)
-    println("Discard complete. Remaining size: ", length(S))
+# repeatedly apply set_value_discard until no more vertices can be discarded
+function fixed_point_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbose=true)
+    prev_size = Inf
+    n_iter = 0
+    while length(S) < prev_size
+        prev_size = length(S)
+        set_value_discard!(G, w, θ, val, S, current_weight; ϵ, verbose)
+        n_iter += 1
+    end
+    n_iter -= 1
+    if verbose && n_iter > 0
+        println("Fixed point discard complete after ", n_iter, " round(s). Remaining vertices: ", prev_size)
+    end
+    if n_iter > 1
+        println("Warning! More than 1 iterations of discarding observed.")
+    end
+end
 
+# apply tabu_valfun() to pick n_rounds number of vertices, then for each vertex
+# in the remaining set, test whether it is in some maximum stable set
+function tabu_valfun_test(G, w, θ, val; n_rounds=0, solver="SCS", ϵ=1e-4, graph_name=nothing, use_complement=nothing)
+    x_stable, S = tabu_valfun(G, w, θ, val; max_rounds=n_rounds, ϵ=ϵ, verbose=false)
+
+    # S = set_value_discard(G, w, θ, val, S, ϵ)
+    # println("First round complete. Remaining size: ", length(S))
     # if graph_name != nothing && use_complement != nothing
     #     plot_graph_no_isolated(G[S], graph_name, use_complement)
     # end
 
-    greedy_verify(S, G, w)
-    # theta_verify(S, G, w, val, θ, ϵ)
+    stable_set_test(G, w, val, S, x_stable; ϵ)
+    # theta_test(G, w, θ, val, S, x_stable; solver, ϵ)
 end
 
 
-# function primal_discard(S, X, ϵ=1e-6)
-#     return filter(n -> X[end, n] > ϵ, S)
-# end
-
-
-# for each vertex in S, pick it and then greedily pick subsequent vertices, and check the weight of the resulting stable set
-function greedy_verify(S, G, w)
-    n = length(w)
-    xr = falses(n)
-    T = copy(S)
-    for first_v in T
-        xr[first_v] = true
-        S = del(G, S, first_v)
-        while !isempty(S)
-            v = S[1]  # pick a vertex in the remaining candidates
-            xr[v] = true
-            S = del(G, S, v)  # this ensures the final output is a stable set
+# verify each vertex in S is in some maximum stable set by picking it first and
+# then iteratively discarding and picking (as in tabu_valfun)
+function stable_set_test(G, w, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); ϵ=1e-4)
+    for first_v in S
+        T = copy(S)
+        y_stable = copy(x_stable)
+        pick_vertex!(G, T, y_stable; v_to_pick=first_v)
+        current_weight = w' * y_stable
+        while true
+            fixed_point_discard!(G, w, θ, val, T, current_weight; ϵ=ϵ, verbose=false)
+            if !isempty(T)
+                pick_vertex!(G, T, y_stable)
+                current_weight = w' * y_stable
+            else
+                break
+            end
         end
-        println("Finished starting with ", string(first_v), ". Final weight: ", w' * xr)
-        xr = falses(n)
-        S = copy(T)
+        println("Finished starting with ", string(first_v), ". Final weight: ", current_weight)
     end
 end
 
-# for each vertex in S, pick it and compute the theta value of the remaining subgraph
-function theta_verify(S, G, w, val, θ, ϵ, solver="SCS")
-    n = length(w)
-    xr = falses(n)
-    T = copy(S)
-    for first_v in T
-        xr[first_v] = true
-        S = del(G, S, first_v)
-        E = collect(edges(G[S]))
-        # compute theta on the subgraph G[S]
-        sol = dualSDP(E, w[S], solver, verbose=false)
-        val_S = val(S)
-        println("Original theta: ", θ, ". Value function when ", string(first_v), " with weight ", w[first_v], " is picked: ", val_S, "; new theta value: ", sol.value)
-        if abs(val_S - sol.value) > ϵ || abs(θ - sol.value) > w[first_v] + ϵ
-            println("Warning!")
+# verify each vertex in S is in some maximum stable set by picking it and
+# computing the theta value of the remaining subgraph
+function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); solver="SCS", ϵ=1e-6)
+    n = nv(G)
+    for first_v in S
+        T = copy(S)
+        y_stable = copy(x_stable)
+        pick_vertex!(G, T, y_stable; v_to_pick=first_v)
+        current_weight = w' * y_stable
+        # compute theta on the subgraph G[T]
+        E = collect(edges(G[T]))
+        sol = dualSDP(E, w[T]; solver=solver, verbose=false)
+        θ_T  = sol.value
+        val_T = val(T)
+        if abs(val_T - θ_T) > ϵ || abs(θ - θ_T) > w[first_v] + current_weight + ϵ
+            println("Warning! Original theta: ", θ, ". When ", string(first_v), " with weight ", w[first_v], " is picked, current weight: ", current_weight, "; remaining value: ", val_T, "; remaining theta: ", θ_T)
         end
-        S = copy(T)
     end
 end
 
-# pick vertices in S in a specified order, and compute the weight of the resulting stable set
-function manual_verify(S, G, w, order=[])
-    n = length(w)
-    xr = falses(n)
+# pick vertices in S in a specified order, and compute the weight of the
+# resulting stable set
+function manual_test(G, w, order, S=collect(1:nv(G)))
+    n = nv(G)
+    x_stable = falses(n)
     for v in order
         if isempty(S)
             break
@@ -215,76 +264,64 @@ function manual_verify(S, G, w, order=[])
             println("Warning: vertex ", v, " is not in the set. Using S[1] instead.")
             v = S[1]
         end
-        xr[v] = true
-        S = del(G, S, v)
+        x_stable[v] = true
+        del!(G, S, v)
     end
-    while !isempty(S)
-        v = S[1]
-        xr[v] = true
-        S = del(G, S, v)
-    end
-    println("Finished with picking order ", order, " Final weight: ", w' * xr)
+    x_stable = greedy_retrieval!(G, S, x_stable)
+    println("Finished with picking order ", order, " Final weight: ", w' * x_stable)
 end
 
 
-function vertex_value_discard(S, val, w, ϵ, verbose=true)
-    T = copy(S)
-    for v in T
-        val_v = val([v])
-        if w[v] < val_v - ϵ
-            S = setdiff(S, v)
-            if verbose
-                println(v, " is discarded. Value: ", val_v)
-            end
-        end
-    end
-    return S
-end
 
-
-function set_value_discard(S, G, θ, val, w, ϵ, current_weight=0, verbose=true)
-    T = copy(S)
-    for v in T
-        val_v_c = val(del(G, T, v))
-        if w[v] + val_v_c < θ - current_weight - ϵ
-            S = setdiff(S, v)
-            if verbose
-                println(v, " is discarded. Value of LHS: ", w[v] + val_v_c, "; value of RHS: ", θ - current_weight)
-            end
-        end
-    end
-    return S
-end
-
-
-function fixed_point_discard(S, G, θ, val, w, ϵ, current_weight=0, verbose=true)
-    terminate = false
-    current_size = length(S)
-    iter = 1
-    while !terminate
-        S = set_value_discard(S, G, θ, val, w, ϵ, current_weight, verbose)
-        if length(S) == current_size
-            terminate = true
-        end
-        current_size = length(S)
-        println("Fixed point ", iter, " complete. Remaining vertices: ", current_size)
-        iter += 1
-    end
-    return S
-end
-
-function verify_subadditivity(G, val, ϵ=1e-4)
-    println("Verifying subadditivity...")
-    n = nv(G)
+function test_subadditivity(sol; solver="SCS", solver_ϵ=1e-7, ϵ=1e-4, psd_ϵ=1e-8, bisect_ϵ=1e-10)
+    Q = Matrix(sol.Q)
+    val = valfun(Q)
+    val_sdp = valfun_sdp(Q; solver=solver, ϵ=solver_ϵ)
+    val_bisect = valfun_bisect(sol; psd_ϵ=psd_ϵ, bisect_ϵ=bisect_ϵ)
+    n = size(Q, 1) - 1
     N = 1:n
     for s in powerset(N, 1, floor(Int64, n/2))
         for t in powerset(setdiff(N, s), 1)
-            if(val(s) + val(t) < val(sort(vcat(s, t))) - ϵ)
-                println("Warning! Value of ", s, " is ", val(s), ", value of ", t, " is ", val(t), "; value of union is ", val(sort(vcat(s,t))), ". The difference is ", val(sort(vcat(s, t))) - val(s) - val(t) )
-                break
+            test_sets_subadditivity(s, t, val, val_sdp, val_bisect; ϵ=ϵ)
+            # if !(test_sets_subadditivity(s, t, val, val_sdp, val_bisect; ϵ=ϵ))
+            #     break
+            # end
+        end
+    end
+end
+
+function random_test_subadditivity(sol; solver="SCS", solver_ϵ=1e-7, n_iter=10000, ϵ=1e-4, psd_ϵ=1e-8, bisect_ϵ=1e-10)
+    Q = Matrix(sol.Q)
+    val = valfun(Q)
+    val_sdp = valfun_sdp(Q; solver=solver, ϵ=solver_ϵ)
+    val_bisect = valfun_bisect(sol; psd_ϵ=psd_ϵ, bisect_ϵ=bisect_ϵ)
+    n = size(Q, 1) - 1
+    N = 1:n
+    for i in 1:n_iter
+        s_size = rand(1:floor(Int64, n/2))
+        s = rand(N, s_size)
+        t_set = setdiff(N, s)
+        t_size = rand(1:length(t_set))
+        t = rand(t_set, t_size)
+        test_sets_subadditivity(s, t, val, val_sdp, val_bisect; ϵ=ϵ)
+    end
+end
+
+
+function test_sets_subadditivity(s, t, val, val_sdp, val_bisect; ϵ=1e-4)
+    st = sort(vcat(s, t))
+    if(val(s) + val(t) < val(st) - ϵ)
+        if (val_sdp(s) + val_sdp(t) < val_sdp(st) - ϵ)
+            val_s = val_bisect(s)
+            val_t = val_bisect(t)
+            val_st = val_bisect(st)
+            if (val_s + val_t < val_st - ϵ)
+                println("Warning! Value of ", s, " is ", val_s, ", value of ", t, " is ", val_t, "; value of union is ", val_st, ". The difference is ", val_st - val_s - val_t)
+                return false
             end
         end
     end
+    return true
 end
 
 # function verify_neighbor_property(G, val, w, ϵ=1e-3)
@@ -298,10 +335,10 @@ end
 #     end
 # end
 
-function dualSDP_test(E, w, solver; ϵ=1e-7, verbose=false, t_bound=0, test_negative=false, test_nonnegativity=false)
+function dualSDP_test(E, w; solver="SCS", ϵ=1e-7, verbose=false, t_bound=0, test_negative=false, test_nonnegativity=false)
     n = length(w)
     i0 = n + 1
-    model = theta_sdp_model(solver=solver, verbose=verbose)
+    model = theta_sdp_model(solver=solver, ϵ=ϵ, verbose=verbose)
     @variable(model, t)
     @variable(model, λ[1:n])
     @variable(model, Λ[1:length(E)])  # vector of lambda_ij

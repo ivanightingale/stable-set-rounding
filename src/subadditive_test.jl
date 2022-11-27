@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.14
+# v0.19.15
 
 using Markdown
 using InteractiveUtils
@@ -20,66 +20,60 @@ using StatsBase
 using GraphPlot, Compose, Colors, Cairo, Fontconfig, MatrixMarket
 
 # ╔═╡ c2ce2a5d-6060-442e-9b1a-928a79772ceb
-include("valfun.jl")
+include("valfun.jl");
 
 # ╔═╡ ff5d5c78-1237-44e1-b8c5-16c6611ca229
-include("graph_utils.jl")
+include("graph_utils.jl");
 
 # ╔═╡ db8f90a9-7709-42d7-ac93-aab6e92fe98a
 begin
 	# use_complement = true
-	# graph_name = "connecting-100-4"
+	# graph_name = "growing-100-5"
 	# family = "chordal"
 	# G = load_family_graph(graph_name, family, use_complement)
 	
-	# use_complement = true;
-	# graph_name = "johnson16-2-4";
-	# G = load_dimacs_graph(graph_name, use_complement);
-
-	G = erdos_renyi(40, 400)
+	use_complement = false;
+	graph_name = "hamming8-2";
+	G = load_dimacs_graph(graph_name, use_complement);
+	
 	n = nv(G);
 	E = collect(edges(G));
 end
 
 # ╔═╡ 2a85b224-71c2-4dce-9c4d-03b584cb506f
-# w = 5 * rand(n);
+# w = 10 * rand(n);
 w = ones(n);
 
-# ╔═╡ e2c7f9eb-f787-4fa8-a86f-3054c486644b
-sol = dualSDP(E, w, "SCS", test_nonnegativity=true);
+# ╔═╡ fc8821b8-67eb-4029-bdc4-182c2f8ecb85
+solver = "COSMO";
 
-# ╔═╡ 47f7d80c-5885-458d-ae7b-779e841e2ec0
-println(sol.value)
+# ╔═╡ e18b57e7-8eb0-41c3-bcf4-3f8ab74274b9
+begin
+	orig_sol = dualSDP(E, w, solver);
+	println(orig_sol.value)
+end
+
+# ╔═╡ e2c7f9eb-f787-4fa8-a86f-3054c486644b
+begin
+	sol = dualSDP_test(E, w, solver, test_nonnegativity=true);
+	println(sol.value)
+end
 
 # ╔═╡ dbe048bd-e5ec-4c80-bd77-cd9fe9c75cea
 Q = Matrix(sol.Q);
 
-# ╔═╡ 5b93f669-4309-413d-9ac5-f3cce26be3fc
-_, neg_ind = findmin(Q[1:n, 1:n])
-
-# ╔═╡ 4c7df17f-a341-455c-848a-73729e940a2c
-val = valfun(Q);
+# ╔═╡ e9d3d8b6-bea9-49a0-a125-6e7decc526d1
+random_verify_subadditivity(Q, "COSMO", 100000)
 
 # ╔═╡ 7f96fb18-69af-4a74-af30-c9a5b005df7a
-begin
-	S = [neg_ind[1]];
-	S_neighbors = union([neighbors(G, i) for i in S]...);
-	subsets_T = collect(powerset(S_neighbors, 1, 4))
-	T = subsets_T[rand(1:length(subsets_T))] ∪ [neg_ind[2]]
-	ST = sort(S ∪ T)
-end
-
-# ╔═╡ 36b2f913-7513-4ab1-b4cf-80ba95f6c9b2
-display(Q[ST, ST])
-
-# ╔═╡ d1cc3dbc-a28a-48af-84f8-50b5e63069fe
-val(ST)
-
-# ╔═╡ 44c856bd-e4ab-4ccf-b09f-2e6cc1cd2a26
-val(S) + val(T)
-
-# ╔═╡ 32ef4728-979a-49f6-b236-40064989e2a4
-val(S) + val(T) > val(ST)
+# begin
+# 	_, neg_ind = findmin(Q[1:n, 1:n])
+# 	S = [neg_ind[1]];
+# 	S_neighbors = union([neighbors(G, i) for i in S]...);
+# 	subsets_T = collect(powerset(S_neighbors, 1, 4))
+# 	T = subsets_T[rand(1:length(subsets_T))] ∪ [neg_ind[2]]
+# 	ST = sort(S ∪ T)
+# end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -869,15 +863,11 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═ff5d5c78-1237-44e1-b8c5-16c6611ca229
 # ╠═db8f90a9-7709-42d7-ac93-aab6e92fe98a
 # ╠═2a85b224-71c2-4dce-9c4d-03b584cb506f
+# ╠═fc8821b8-67eb-4029-bdc4-182c2f8ecb85
+# ╠═e18b57e7-8eb0-41c3-bcf4-3f8ab74274b9
 # ╠═e2c7f9eb-f787-4fa8-a86f-3054c486644b
-# ╠═47f7d80c-5885-458d-ae7b-779e841e2ec0
 # ╠═dbe048bd-e5ec-4c80-bd77-cd9fe9c75cea
-# ╠═5b93f669-4309-413d-9ac5-f3cce26be3fc
-# ╠═4c7df17f-a341-455c-848a-73729e940a2c
+# ╠═e9d3d8b6-bea9-49a0-a125-6e7decc526d1
 # ╠═7f96fb18-69af-4a74-af30-c9a5b005df7a
-# ╠═36b2f913-7513-4ab1-b4cf-80ba95f6c9b2
-# ╠═d1cc3dbc-a28a-48af-84f8-50b5e63069fe
-# ╠═44c856bd-e4ab-4ccf-b09f-2e6cc1cd2a26
-# ╠═32ef4728-979a-49f6-b236-40064989e2a4
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

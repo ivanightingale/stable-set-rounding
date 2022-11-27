@@ -168,6 +168,8 @@ faster than SCS, more PSD
 | ----- | ------ | ---- | --- |  ----- |  ---  | ----- |
 |  256   |   1024   |  128  |  128  |  128    |  128  |  yes   |
 
+can't use COSMO
+
 ## hamming8-4
 | \|V\| | \|E\|  |  θ  |  α |   round_valfun  |  tabu_valfun  |  perfect?  |
 | ----- | ------ | ---- | --- |  ----- |  ---  | ----- |
@@ -348,12 +350,12 @@ use COSMO or Mosek
 | ----- | ------ | --- | --- |   ----     |   ---- |  ------ |
 |  200   |  1990  |  60  |  60  |   60   |   60   |  5-cycle   |
 
-## **san200-0.9-3**
+## san200-0.9-3
 | \|V\| | \|E\|  | θ |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
 | ----- | ------ | --- | --- |   ----     |   ---- |  ------ |
-|  200   |  1990  |  44  |  44  |   44   |   2    |  5-cycle   |
+|  200   |  1990  |  44  |  44  |   44   |   44    |  5-cycle   |
 
-use Mosek
+use Mosek (SCS, COSMO very slow). Use ϵ <= 1e-6
 
 
 ## san400-0.5-1
