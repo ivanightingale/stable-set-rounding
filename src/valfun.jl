@@ -66,9 +66,8 @@ end
 
 # More accurate value function via bisection
 # solve the submatrix SDP via bisection
-function valfun_bisect(sol; psd_ϵ=1e-8, bisect_ϵ=1e-10)
-    upperBound = sol.value
-    Q = Matrix(sol.Q)
+function valfun_bisect(Q, θ; psd_ϵ=1e-8, bisect_ϵ=1e-10)
+    upperBound = θ
     n = size(Q, 1) - 1
     i0 = n + 1
     A = Symmetric(Q[1:n, 1:n])
@@ -90,16 +89,17 @@ function bisection(S, condition, t0, t1; ϵ=1e-10)
 end
 
 
-del = (G,S,i) -> setdiff(S, vcat(neighbors(G,i), [i]))
-del! = (G,S,i) -> setdiff!(S, vcat(neighbors(G,i), [i]))
-
-
 function print_valfun(val, n, max_size=n)
     subsets = powerset(1:n, 0, max_size)
     for s in subsets
         println(s, " ", val(s))
     end
 end
+
+
+del = (G,S,i) -> setdiff(S, vcat(neighbors(G,i), [i]))
+del! = (G,S,i) -> setdiff!(S, vcat(neighbors(G,i), [i]))
+
 
 # rounding based on value function, a heuristics for general graphs
 function round_valfun(G, w, θ, val)
@@ -117,7 +117,7 @@ function round_valfun(G, w, θ, val)
     return x_stable
 end
 
-# using value function to iteratively discard and pick vertices to form a stable
+# use value function to iteratively discard and pick vertices to form a stable
 # set
 function tabu_valfun(G, w, θ, val; max_rounds=nv(G), ϵ=1e-4, verbose=true)
     n = nv(G)
@@ -142,7 +142,7 @@ function tabu_valfun(G, w, θ, val; max_rounds=nv(G), ϵ=1e-4, verbose=true)
 end
 
 
-# pick a vertex in S (update the boolean vector) and update S
+# pick a vertex in S (update the boolean vector x_stable) and update S
 function pick_vertex!(G, S, x_stable; v_to_pick=S[1])
     x_stable[v_to_pick] = true
     del!(G, S, v_to_pick)
@@ -196,8 +196,11 @@ end
 
 # apply tabu_valfun() to pick n_rounds number of vertices, then for each vertex
 # in the remaining set, test whether it is in some maximum stable set
-function tabu_valfun_test(G, w, θ, val; n_rounds=0, solver="SCS", ϵ=1e-4, graph_name=nothing, use_complement=nothing)
-    x_stable, S = tabu_valfun(G, w, θ, val; max_rounds=n_rounds, ϵ=ϵ, verbose=false)
+function tabu_valfun_test(G, w, θ, val; n_rounds=0, solver="SCS", ϵ=1e-6, graph_name=nothing, use_complement=nothing, verbose=false)
+    # first, pick a specified number of vertices with tabu_valfun()
+    x_stable, S = tabu_valfun(G, w, θ, val; max_rounds=n_rounds, ϵ=ϵ, verbose=verbose)
+    # discard bad vertices in the resulting set
+    fixed_point_discard!(G, w, θ, val, S, w' * x_stable; ϵ=ϵ, verbose=verbose)
 
     # S = set_value_discard(G, w, θ, val, S, ϵ)
     # println("First round complete. Remaining size: ", length(S))
@@ -205,21 +208,21 @@ function tabu_valfun_test(G, w, θ, val; n_rounds=0, solver="SCS", ϵ=1e-4, grap
     #     plot_graph_no_isolated(G[S], graph_name, use_complement)
     # end
 
-    stable_set_test(G, w, val, S, x_stable; ϵ)
+    stable_set_test(G, w, val, S, x_stable; ϵ=ϵ, verbose=verbose)
     # theta_test(G, w, θ, val, S, x_stable; solver, ϵ)
 end
 
 
 # verify each vertex in S is in some maximum stable set by picking it first and
 # then iteratively discarding and picking (as in tabu_valfun)
-function stable_set_test(G, w, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); ϵ=1e-4)
+function stable_set_test(G, w, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); ϵ=1e-4, verbose=false)
     for first_v in S
         T = copy(S)
         y_stable = copy(x_stable)
         pick_vertex!(G, T, y_stable; v_to_pick=first_v)
         current_weight = w' * y_stable
         while true
-            fixed_point_discard!(G, w, θ, val, T, current_weight; ϵ=ϵ, verbose=false)
+            fixed_point_discard!(G, w, θ, val, T, current_weight; ϵ=ϵ, verbose=verbose)
             if !isempty(T)
                 pick_vertex!(G, T, y_stable)
                 current_weight = w' * y_stable
@@ -251,37 +254,33 @@ function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); s
     end
 end
 
-# pick vertices in S in a specified order, and compute the weight of the
-# resulting stable set
-function manual_test(G, w, order, S=collect(1:nv(G)))
+
+# test the subadditivity of a value function
+function test_val_subadditivity(G, val; ϵ=1e-6)
     n = nv(G)
-    x_stable = falses(n)
-    for v in order
-        if isempty(S)
-            break
-        end
-        if !(v in S)
-            println("Warning: vertex ", v, " is not in the set. Using S[1] instead.")
-            v = S[1]
-        end
-        x_stable[v] = true
-        del!(G, S, v)
-    end
-    x_stable = greedy_retrieval!(G, S, x_stable)
-    println("Finished with picking order ", order, " Final weight: ", w' * x_stable)
-end
-
-
-
-function test_subadditivity(sol; solver="SCS", solver_ϵ=1e-7, ϵ=1e-4, psd_ϵ=1e-8, bisect_ϵ=1e-10)
-    Q = Matrix(sol.Q)
-    val = valfun(Q)
-    val_sdp = valfun_sdp(Q; solver=solver, ϵ=solver_ϵ)
-    val_bisect = valfun_bisect(sol; psd_ϵ=psd_ϵ, bisect_ϵ=bisect_ϵ)
-    n = size(Q, 1) - 1
     N = 1:n
     for s in powerset(N, 1, floor(Int64, n/2))
         for t in powerset(setdiff(N, s), 1)
+            val_s = val(s)
+            val_t = val(t)
+            val_st = val(sort(vcat(s, t)))
+            if (val_s + val_t < val_st - ϵ)
+                println("Warning! Value of ", s, " is ", val_s, ", value of ", t, " is ", val_t, "; value of union is ", val_st, ". The difference is ", val_st - val_s - val_t)
+            end
+        end
+    end
+end
+
+
+# test the subadditivity of a dual solution Q, using different methods of
+# computing value function
+function test_subadditivity(Q, θ, S=collect(1:size(Q, 1) - 1); solver="SCS", solver_ϵ=1e-7, ϵ=1e-4, psd_ϵ=1e-8, bisect_ϵ=1e-10)
+    val = valfun(Q)
+    val_sdp = valfun_sdp(Q; solver=solver, ϵ=solver_ϵ)
+    val_bisect = valfun_bisect(Q, θ; psd_ϵ=psd_ϵ, bisect_ϵ=bisect_ϵ)
+    n = length(S)
+    for s in powerset(S, 1, floor(Int64, n/2))
+        for t in powerset(setdiff(S, s), 1)
             test_sets_subadditivity(s, t, val, val_sdp, val_bisect; ϵ=ϵ)
             # if !(test_sets_subadditivity(s, t, val, val_sdp, val_bisect; ϵ=ϵ))
             #     break
@@ -290,24 +289,23 @@ function test_subadditivity(sol; solver="SCS", solver_ϵ=1e-7, ϵ=1e-4, psd_ϵ=1
     end
 end
 
-function random_test_subadditivity(sol; solver="SCS", solver_ϵ=1e-7, n_iter=10000, ϵ=1e-4, psd_ϵ=1e-8, bisect_ϵ=1e-10)
-    Q = Matrix(sol.Q)
+function random_test_subadditivity(Q, θ, S=collect(1:size(Q, 1) - 1); solver="SCS", solver_ϵ=1e-7, n_iter=10000, ϵ=1e-4, psd_ϵ=1e-8, bisect_ϵ=1e-10)
     val = valfun(Q)
     val_sdp = valfun_sdp(Q; solver=solver, ϵ=solver_ϵ)
-    val_bisect = valfun_bisect(sol; psd_ϵ=psd_ϵ, bisect_ϵ=bisect_ϵ)
-    n = size(Q, 1) - 1
-    N = 1:n
+    val_bisect = valfun_bisect(Q, θ; psd_ϵ=psd_ϵ, bisect_ϵ=bisect_ϵ)
+    n = length(S)
     for i in 1:n_iter
         s_size = rand(1:floor(Int64, n/2))
-        s = rand(N, s_size)
-        t_set = setdiff(N, s)
+        s = rand(S, s_size)
+        t_set = setdiff(S, s)
         t_size = rand(1:length(t_set))
         t = rand(t_set, t_size)
         test_sets_subadditivity(s, t, val, val_sdp, val_bisect; ϵ=ϵ)
     end
 end
 
-
+# test the subadditivity of two sets, using different methods of computing value
+# function
 function test_sets_subadditivity(s, t, val, val_sdp, val_bisect; ϵ=1e-4)
     st = sort(vcat(s, t))
     if(val(s) + val(t) < val(st) - ϵ)

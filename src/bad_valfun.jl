@@ -8,7 +8,7 @@ include("valfun.jl")
 # 1. LP to find weights and val such that all vertices are not discarded, while
 # minimizing val(N)
 # 2. find θ value using the weights. θ should match val(N)
-function find_bad_val_w(G)
+function find_bad_val(G)
     n = nv(G)
     N = collect(1:n)
 
@@ -25,12 +25,12 @@ function find_bad_val_w(G)
         end
     end
     for s in powerset(N, 1, floor(Int64, n/2))
-        disconnected_vertices = del_set(G, N, s)
+        disconnected_vertices = del_set(G, N, s)  # the set of vertices disconnected to s
         for t in powerset(setdiff(N, s), 1)
             if issubset(t, disconnected_vertices)
                 @constraint(model, v[s] + v[t] == v[sort(vcat(s, t))])
             # else
-            #     @constraint(model, v[s] + v[t] >= v[sort(vcat(s, t))])
+            #     @constraint(model, v[s] + v[t] >= v[sort(vcat(s, t))])  # subadditivity
             end
         end
     end
@@ -84,6 +84,7 @@ G = load_family_graph(graph_name, family, use_complement)
 # plot_graph(G, graph_name, use_complement)
 
 n = nv(G)
+println(graph_name, " ", use_complement)
 println(n)
 println(ne(G))
 
@@ -92,12 +93,25 @@ println(ne(G))
 
 # find_bad_val_rand(G)
 
-bad_val, bad_w, θ = find_bad_val_w(G)
-# val, θ = get_valfun(G, bad_w)
+bad_val, bad_w, θ = find_bad_val(G)
+
+sol = dualSDP(collect(edges(G)), bad_w; solver="Mosek", ϵ=1e-9)
+θ = sol.value
+println("SDP Value: ", θ)
+
+Q = Matrix(sol.Q)
+val = valfun(Q)
+
+tabu_valfun(G, bad_w, θ, val; ϵ=1e-6, verbose=true)
+
 # print_valfun(val, n)
 
-# stable_set_test(G, bad_w, bad_val)
-theta_test(G, bad_w, θ, bad_val; solver="SCS")
+# check if bad_val is good or bad (whether each vertex is in some max stable set)
+stable_set_test(G, bad_w, bad_val)
+# theta_test(G, bad_w, θ, bad_val; solver="SCS")
 
-# verify_subadditivity(G, bad_val, 1e-6)
-# verify_subadditivity(G, val, 1e-6)
+println("Testing subadditivity...")
+test_val_subadditivity(G, bad_val; ϵ=1e-6)
+
+println("Testing subadditivity...")
+test_val_subadditivity(G, val; ϵ=1e-6)
