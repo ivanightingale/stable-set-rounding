@@ -1,4 +1,4 @@
-using JuMP, SCS, COSMO, MosekTools
+using JuMP
 using LinearAlgebra, SparseArrays
 using Combinatorics
 using Graphs

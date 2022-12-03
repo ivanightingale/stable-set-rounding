@@ -338,7 +338,7 @@ COSMO much faster than SCS
 | ----- | ------ | --- | --- |   ----     |   ---- |  ------ |
 |  200   |  5970  |  18  | 18  |   18   |   18    |   5-cycle  |
 
-use COSMO or Mosek
+don't use SCS
 
 ## san200-0.9-1
 | \|V\| | \|E\|  | θ |  α  |   round_valfun  |  tabu_valfun  |  perfect?  |
