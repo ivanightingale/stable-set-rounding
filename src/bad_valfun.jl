@@ -4,6 +4,7 @@ using JuMP, SCS, MosekTools, COPT
 
 include("graph_utils.jl")
 include("valfun.jl")
+include("valfun_lib.jl")
 
 # 1. LP to find weights and val such that all vertices are not discarded, while
 # minimizing val(N)
@@ -48,14 +49,14 @@ function find_bad_val(G)
         return nothing, nothing
     end
 
-    w_val = value.(w)
+    bad_w = value.(w)
     bad_val = (S) -> value(v[S])
-    println(w_val)
+    println(bad_w)
 
-    θ = dualSDP(collect(edges(G)), w_val).value
-    println("The theta value is ", θ, ", and val(N) is ", value(v[N]))
+    sdp_sol = dualSDP(G, bad_w; solver="Mosek", ϵ=1e-9)
+    println("The theta value is ", sdp_sol.value, ", and val(N) is ", value(v[N]))
 
-    return bad_val, w_val, θ
+    return bad_w, bad_val, sdp_sol
 end
 
 
@@ -93,25 +94,19 @@ println(ne(G))
 
 # find_bad_val_rand(G)
 
-bad_val, bad_w, θ = find_bad_val(G)
-
-sol = dualSDP(collect(edges(G)), bad_w; solver="Mosek", ϵ=1e-9)
-θ = sol.value
-println("SDP Value: ", θ)
-
-Q = Matrix(sol.Q)
-val = valfun(Q)
-
-tabu_valfun(G, bad_w, θ, val; ϵ=1e-6, verbose=true)
-
-# print_valfun(val, n)
+bad_w, bad_val, sdp_sol = find_bad_val(G)
+print_valfun(bad_val, n)
+θ = sdp_sol.value
+val = valfun(Matrix(sdp_sol.Q))
 
 # check if bad_val is good or bad (whether each vertex is in some max stable set)
-stable_set_test(G, bad_w, bad_val)
-# theta_test(G, bad_w, θ, bad_val; solver="SCS")
+println("stable set test")
+stable_set_test(G, bad_w, θ, bad_val)
+println("theta test")
+theta_test(G, bad_w, θ, bad_val; solver="SCS")
 
 println("Testing subadditivity...")
-test_val_subadditivity(G, bad_val; ϵ=1e-6)
+test_subadditivity(θ, 1:n, bad_val; ϵ=1e-6)
 
-println("Testing subadditivity...")
-test_val_subadditivity(G, val; ϵ=1e-6)
+# println("Testing subadditivity...")
+# test_subadditivity(θ, 1:n, val; ϵ=1e-6)

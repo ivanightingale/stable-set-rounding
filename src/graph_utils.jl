@@ -42,40 +42,46 @@ function generate_family_graph(family, n, use_complement=false)
 end
 
 
-function plot_graph_no_isolated(G, graph_name, use_complement)
+# TODO: allow to input a subset of vertices to put in a different color (if not provided, check bipartite)
+function plot_graph(G, graph_name, use_complement=false; S_to_color=[], remove_isolated=false, suffix="", layout = spring_layout, add_label=false)
+    if suffix != ""
+        suffix = "_" * suffix
+    end
     if use_complement
-        image_file = "../images/" * graph_name * "_co.png"
-    else
-        image_file = "../images/" * graph_name * ".png"
+        suffix = "_co" * suffix
     end
 
-    V_no_isolated = vcat(filter(c -> length(c) > 1, connected_components(G))...)  # indices of vertices of G_S without isolated vertices
-    println("Non-isolated vertices: ", length(V_no_isolated))
-    if length(V_no_isolated) > 0
-        G_no_isolated = G[V_no_isolated]
+    image_file = "../images/" * graph_name * suffix * ".png"
+
+    if remove_isolated
+        G_copy = copy(G)
+        # indices of vertices of G without isolated vertices
+        V_no_isolated = vcat(filter(c -> length(c) > 1, connected_components(G))...)
+        # println("Non-isolated vertices: ", length(V_no_isolated))
+        if length(V_no_isolated) > 0
+            G_copy = G[V_no_isolated]
+        else
+            G_copy = G
+        end
     else
-        G_no_isolated = G
+        G_copy = G
     end
 
-    if is_bipartite(G_no_isolated)
-        nodecolor = [colorant"lightseagreen", colorant"orange"]
-        draw(PNG(image_file, 100cm, 100cm), gplot(G_no_isolated, NODESIZE=0.05/sqrt(nv(G_no_isolated)), layout=spring_layout, nodefillc=nodecolor[bipartite_map(G_no_isolated)]))
+    nodecolor = [colorant"lightseagreen", colorant"orange"]
+    if add_label
+        node_label = 1:nv(G_copy)
     else
-        draw(PNG(image_file, 100cm, 100cm), gplot(G_no_isolated, NODESIZE=0.05/sqrt(nv(G_no_isolated)), layout=spring_layout))
+        node_label = nothing
     end
-end
-
-function plot_graph(G, graph_name, use_complement)
-    if use_complement
-        image_file = "../images/" * graph_name * "_co_orig.png"
+    if length(S_to_color) == 0
+        if is_bipartite(G_copy)
+            draw( PNG(image_file, 100cm, 100cm), gplot(G_copy, NODESIZE=0.05/sqrt(nv(G_copy)), layout=layout, nodefillc=nodecolor[bipartite_map(G_copy)], nodelabel=node_label) )
+        else
+            draw( PNG(image_file, 100cm, 100cm), gplot(G_copy, NODESIZE=0.05/sqrt(nv(G_copy)), layout=layout, nodelabel=node_label) )
+        end
     else
-        image_file = "../images/" * graph_name * "_orig.png"
-    end
-
-    if is_bipartite(G)
-        nodecolor = [colorant"lightseagreen", colorant"orange"]
-        draw(PNG(image_file, 100cm, 100cm), gplot(G, NODESIZE=0.05/sqrt(nv(G)), layout=spring_layout, nodefillc=nodecolor[bipartite_map(G)]))
-    else
-        draw(PNG(image_file, 100cm, 100cm), gplot(G, NODESIZE=0.05/sqrt(nv(G)), layout=spring_layout, nodelabel=1:nv(G)))
+        V = vertices(G_copy)
+        color_map = [V[i] in S_to_color for i in 1:nv(G_copy)] .+ 1
+        draw( PNG(image_file, 100cm, 100cm), gplot(G_copy, NODESIZE=0.05/sqrt(nv(G_copy)), layout=layout, nodefillc=nodecolor[color_map], nodelabel=node_label) )
     end
 end
