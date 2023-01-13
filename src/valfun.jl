@@ -1,7 +1,9 @@
-using JuMP, MosekTools, SCS, COSMO, COPT
+using JuMP, MosekTools, SCS, COSMO, COPT, Dualization
 using LinearAlgebra, SparseArrays
 using Combinatorics
 using Graphs
+using Polyhedra
+using PersistentCohomology
 
 ###########################
 # SDP-based value functions
@@ -61,7 +63,7 @@ end
 # More accurate value function by explicitly solving SDP
 # use value of the PSD matrix in the dual SDP, and solve an SDP on its submatrix
 # to obtain a value function
-function valfun_sdp(Q; solver="SCS", ϵ=1e-7)
+function valfun_sdp_explicit(Q; solver="SCS", ϵ=1e-7)
     n = size(Q,1)-1
     i0 = n+1
     A = Symmetric(Q[1:n,1:n])
@@ -113,18 +115,62 @@ function valfun_qstab(λ, cliques)
     return S -> sum([λ[i] for (i, c) in enumerate(cliques) if !isempty(S ∩ c)])
 end
 
-
-# Find max stable set by starting with the fractional stable set polytope (edge
-# polytope) and adding clique cutting planes
-# Return the optimal dual variables indexed by cliques
-function clique_stable_set_lp(G, w; verbose=false)
+# Solve max stable set by solving an LP over the clique polytope (QSTAB) by
+# finding all maximal stable sets (stable sets that are not subsets of other stable
+# sets) and adding corresponding constraints
+# Return all optimal dual solutions and the corresponding cliques
+function qstab_lp(G, w; verbose=false)
     n = nv(G)
     E = collect(edges(G))
-    model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => false, "LogToConsole" => false))
+    model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => verbose, "LogToConsole" => verbose))
     @variable(model, x[1:n] >= 0)
 
-    # cons = @constraint(model, [i in 1:n], x[i] <= 1)
-    # cliques = [[i] for i in 1:n]
+    # find unweighted max stable set number
+    α = Int(max_clique(G, ones(n)).value)
+
+    cons = Vector{ConstraintRef}(undef, 0)
+    cliques = Vector{Vector{Int64}}(undef, 0)
+
+    # find all maximal cliques
+    clique_lists = vietorisrips(adjacency_matrix(G), α)
+    for k in α:-1:1
+        k_cliques = keys(clique_lists[k])
+        for i in 1:length(k_cliques)
+            clique_to_add = sort(collect(k_cliques[i]))
+            to_add = true
+            for j in 1:length(cliques)
+                existing_clique = cliques[j]
+                # do not add the new clique if it is the subset of an already added clique
+                if issubset(clique_to_add, existing_clique)
+                    to_add = false
+                    break
+                end
+            end
+            if to_add
+                push!(cliques, clique_to_add)
+            end
+        end
+    end
+    # add corresponding constraints
+    for c in cliques
+        push!(cons, @constraint(model, sum(x[c]) <= 1))
+    end
+    println(cliques)
+    @objective(model, Max, w' * x)
+    optimize!(model)
+
+    return (x=value.(x), value=objective_value(model), λ_ext_points=dual_extreme_points(model), cliques=cliques)
+end
+
+# Solve max stable set by starting with the fractional stable set polytope (edge
+# polytope) and adding clique cutting planes by solving auxiliary problems
+# Return an optimal dual solution and the corresponding cliques
+function qstab_lp_cutting_planes(G, w; verbose=false)
+    n = nv(G)
+    E = collect(edges(G))
+    model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => verbose, "LogToConsole" => verbose))
+    @variable(model, x[1:n] >= 0)
+
     cons = Vector{ConstraintRef}(undef, 0)
     cliques = Vector{Vector{Int64}}(undef, 0)
     for e in edges(G)
@@ -133,27 +179,34 @@ function clique_stable_set_lp(G, w; verbose=false)
     end
     @objective(model, Max, w' * x)
     sub_sol_value = Inf
-    while (sub_sol_value > 1)
+    while sub_sol_value > 1
         optimize!(model)
+        # solve auxiliary max clique problem
         sub_sol = max_clique(G, value.(x))
         sub_sol_value = sub_sol.value
-        println(sub_sol_value)
         if sub_sol_value > 1
-            clique = findall(sub_sol.z .> 0.5)
-            push!(cliques, clique)
-            push!(cons, @constraint(model, sum(x[clique]) <= 1))
+            clique_to_add = findall(sub_sol.z .> 0.5)
+            println("Clique to add:")
+            println(clique_to_add)
+            # remove redundant constraints of cliques that are subsets of the new clique
+            index_to_delete = findall(map((c) -> issubset(c, clique_to_add), cliques))
+            println("Deleting...")
+            for i in sort(index_to_delete, rev=true)
+                println(cliques[i])
+                delete(model, cons[i])
+                deleteat!(cons, i)
+                deleteat!(cliques, i)
+            end
+            push!(cliques, clique_to_add)
+            push!(cons, @constraint(model, sum(x[clique_to_add]) <= 1))
         end
     end
-    # println(objective_value(model))
-    # println(cons)
-    println(dual.(cons))
-    println(cliques)
     return (x=value.(x), value=objective_value(model), λ=-dual.(cons), cliques=cliques)
 end
 
+
 # Solve an IP to find a max clique on G given weight w
 # Return the optimal solution
-# TODO: make sure the returned optimal solution actually exactly corresponds to a single clique
 function max_clique(G, w)
     n = nv(G)
     model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => false, "LogToConsole" => false))
@@ -163,6 +216,7 @@ function max_clique(G, w)
     optimize!(model)
     return (z=value.(z), value=objective_value(model))
 end
+
 
 # Check whether a sorted list of vertices S form a clique in G
 function is_clique(G, S)
@@ -183,7 +237,24 @@ function is_clique(G, S)
 end
 
 
-# FIXME: the conversion formula seems incorrect
+# find all extreme points of the optimal face in the dual of model which has been solved to optimality
+function dual_extreme_points(model)
+    opt_val = objective_value(model)
+    println("Dualizing...")
+    dual_prob = dualize(model)
+    # optimality face
+    @constraint(dual_prob, sum(all_variables(dual_prob)) == -opt_val)  # note the negative sign
+    dual_opt_h = hrep(dual_prob)
+    println("H to V...")
+    dual_opt_v = doubledescription(dual_opt_h)
+    println("Computing extreme points...")
+    opt_ext_points = collect(Polyhedra.points(dual_opt_v))
+    # println(opt_ext_points)
+    return -opt_ext_points
+end
+
+
+# convert an optimal LP solution to max stable set to an optimal solution of the SDP relaxation
 function qstab_to_sdp(G, w, λ, cliques)
     n = nv(G)
     i0 = n + 1
@@ -198,48 +269,6 @@ function qstab_to_sdp(G, w, λ, cliques)
     end
     Q[i0, i0] = 0
     Q = Symmetric(Q)
-    display(Q)
+    # display(Q)
     return Matrix(Q)
-end
-
-
-
-
-
-function dualSDP_test(E, w; solver="SCS", ϵ=1e-7, verbose=false, t_bound=0, test_negative=false, test_nonnegativity=false)
-    n = length(w)
-    i0 = n + 1
-    model = theta_sdp_model(solver=solver, ϵ=ϵ, verbose=verbose)
-    @variable(model, t)
-    @variable(model, λ[1:n])
-    @variable(model, Λ[1:length(E)])  # vector of lambda_ij
-    Q = Symmetric(sparse([src(e) for e in E], [dst(e) for e in E], Λ, i0, i0) + sparse(collect(1:n), fill(i0, n), -λ, i0, i0)) * 0.5 + sparse(collect(1:n), collect(1:n), λ, i0, i0) - Diagonal([w; 0])
-    Q[i0, i0] = t
-    @constraint(model, X, Q in PSDCone())
-    if t_bound > 0
-        @constraint(model, t >= t_bound)
-    else
-        @objective(model, Min, t)
-    end
-
-    if test_negative
-        @constraint(model, Λ[1] <= -0.1)
-        @constraint(model, Λ[2] <= -0.1)
-    end
-
-    if test_nonnegativity
-        @constraint(model, Λ .>= 0)
-    end
-
-    optimize!(model)
-    X_r = Symmetric(dual.(X))
-    val_r = value(t)
-    lam_r = value.(λ)
-    Lam_r = value.(Λ)
-    Q_r = Symmetric(value.(Q))
-
-    println(max(Lam_r...))
-    println(all(Lam_r .>= -1e-3))
-    println(Lam_r[Lam_r .< -1e-3])
-    return (X=X_r, Q=Q_r, value=val_r, lam=lam_r, Lam=Lam_r)
 end

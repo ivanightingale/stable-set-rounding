@@ -40,7 +40,7 @@ function tabu_valfun(G, w, θ, val; max_rounds=nv(G), ϵ=1e-4, verbose=true)
     S = collect(1:n)
     x_stable = falses(n)
     current_weight = 0
-    vertex_value_discard!(w, val, S; ϵ=ϵ, verbose=verbose)
+    # vertex_value_discard!(w, val, S; ϵ=ϵ, verbose=verbose)
     for i in 1:max_rounds
         fixed_point_discard!(G, w, θ, val, S, current_weight; ϵ, verbose)
         if !isempty(S)
@@ -72,7 +72,7 @@ function vertex_value_discard!(w, val, S; ϵ=1e-6, verbose=true)
         if w[v] < val_v - ϵ
             setdiff!(S, v)
             if verbose
-                println(v, " is discarded. Value: ", val_v)
+                println(v, " is discarded. Value: ", val_v, "; weight: ", w[v])
             end
         end
     end
@@ -105,40 +105,39 @@ function fixed_point_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbo
     if verbose && n_iter > 0
         println("Fixed point discard complete after ", n_iter, " round(s). Remaining vertices: ", prev_size)
     end
-    if n_iter > 1
-        println("Warning! More than 1 iterations of discarding observed.")
-    end
+    # if n_iter > 1
+    #     println("Warning! More than 1 iterations of discarding observed.")
+    # end
 end
 
-# apply tabu_valfun() to pick n_rounds number of vertices, then for each vertex
-# in the remaining set, test whether it is in some maximum stable set
-function tabu_valfun_test(G, w, θ, val; n_rounds=0, ϵ=1e-6, solver="SCS", solver_ϵ=1e-7, graph_name=nothing, use_complement=nothing, verbose=false)
+# apply tabu_valfun() to pick n_rounds number of vertices, then discard vertices that should be discarded;
+# after that, for each vertex in the remaining set, test whether it is in some maximum stable set
+function tabu_valfun_test(G, w, θ, val; use_theta=false, n_rounds=0, ϵ=1e-6, solver="SCS", solver_ϵ=1e-7, graph_name=nothing, use_complement=nothing, verbose=false)
     # first, pick a specified number of vertices with tabu_valfun()
     x_stable, S = tabu_valfun(G, w, θ, val; max_rounds=n_rounds, ϵ=ϵ, verbose=verbose)
     # discard bad vertices in the resulting set
     fixed_point_discard!(G, w, θ, val, S, w' * x_stable; ϵ=ϵ, verbose=verbose)
 
-    # S = set_value_discard(G, w, θ, val, S, ϵ)
-    # println("First round complete. Remaining size: ", length(S))
-    # if graph_name != nothing && use_complement != nothing
-    #     plot_graph_no_isolated(G[S], graph_name, use_complement)
-    # end
-
-    # stable_set_test(G, w, θ, val, S, x_stable; ϵ=ϵ, verbose=verbose)
-    theta_test(G, w, θ, val, S, x_stable; ϵ=ϵ, solver=solver, solver_ϵ=solver_ϵ)
+    if use_theta
+        return theta_test(G, w, θ, val, S, x_stable; ϵ=ϵ, solver=solver, solver_ϵ=solver_ϵ)
+    else
+        return stable_set_test(G, w, θ, val, S, x_stable; ϵ=ϵ)
+    end
 end
 
 
 # verify each vertex in S is in some maximum stable set by picking it first and
 # then iteratively discarding and picking (as in tabu_valfun)
-function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); ϵ=1e-4, verbose=false)
+function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(nv(G)); ϵ=1e-4)
+    is_success = true
     for first_v in S
         T = copy(S)
-        x = copy(x_stable)
+        x = copy(initial_x_stable)
         pick_vertex!(G, T, x; v_to_pick=first_v)
         current_weight = w' * x
+        # pick vertices until exhausted
         while true
-            fixed_point_discard!(G, w, θ, val, T, current_weight; ϵ=ϵ, verbose=verbose)
+            fixed_point_discard!(G, w, θ, val, T, current_weight; ϵ=ϵ, verbose=false)
             if !isempty(T)
                 pick_vertex!(G, T, x)
                 current_weight = w' * x
@@ -146,14 +145,19 @@ function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G
                 break
             end
         end
-        println("Finished starting with ", string(first_v), ". Final weight: ", current_weight)
+        if current_weight < θ - ϵ
+            println("Warning! Original theta: ", θ, ". When picking vertices starting with ", string(first_v), ", final weight is ", current_weight)
+            is_success = false
+        end
     end
+    return is_success
 end
 
 # verify each vertex in S is in some maximum stable set by picking it and
 # computing the theta value of the remaining subgraph
 function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); ϵ=1e-6, solver="SCS", solver_ϵ=1e-7)
     n = nv(G)
+    is_success = true
     for first_v in S
         T = copy(S)
         x = copy(x_stable)
@@ -165,8 +169,23 @@ function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); �
         val_T = val(T)
         if abs(val_T - θ_T) > ϵ || abs(θ - θ_T) > w[first_v] + current_weight + ϵ
             println("Warning! Original theta: ", θ, ". When ", string(first_v), " with weight ", w[first_v], " is picked, current weight: ", current_weight, "; remaining value: ", val_T, "; remaining theta: ", θ_T)
+            is_success = false
         end
     end
+    return is_success
+end
+
+
+function test_qstab_valfuns(G, w, θ, λ_ext_points, cliques; use_theta=false)
+    failure_count = 0
+    for (i, λ) in enumerate(λ_ext_points)
+        val = valfun_qstab(λ, cliques)
+        val_qstab_sdp = valfun(qstab_to_sdp(G, w, λ, cliques))
+        if !tabu_valfun_test(G, w, θ, val; use_theta=use_theta, ϵ=1e-6, solver="Mosek", solver_ϵ=1e-9, verbose=false) || !tabu_valfun_test(G, w, θ, val_qstab_sdp; use_theta=use_theta, ϵ=1e-6, solver="Mosek", solver_ϵ=1e-9, verbose=false)
+            failure_count += 1
+        end
+    end
+    return failure_count
 end
 
 
@@ -219,14 +238,3 @@ function test_sets_subadditivity(s, t, valfuns...; ϵ=1e-4)
     end
     return !violated
 end
-
-# function verify_neighbor_property(G, val, w, ϵ=1e-3)
-#     println("Verifying neighbor property...")
-#     for i in 1:nv(G)
-#         val_i_neighbors = val(sort(vcat([i], neighbors(G, i))))
-#         val_neighbors = val(neighbors(G, i))
-#         if(abs(val_i_neighbors - max(w[i], val_neighbors)) > ϵ)
-#             println("Warning! Value of ", i, " and neighbors is ", val_i_neighbors, "; value of neighbors of ", i, " is ", val_neighbors, ", and weight of ", i, " is ", w[i])
-#         end
-#     end
-# end

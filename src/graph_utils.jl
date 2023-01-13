@@ -42,7 +42,6 @@ function generate_family_graph(family, n, use_complement=false)
 end
 
 
-# TODO: allow to input a subset of vertices to put in a different color (if not provided, check bipartite)
 function plot_graph(G, graph_name, use_complement=false; S_to_color=[], remove_isolated=false, suffix="", layout = spring_layout, add_label=false)
     if suffix != ""
         suffix = "_" * suffix
@@ -57,10 +56,10 @@ function plot_graph(G, graph_name, use_complement=false; S_to_color=[], remove_i
         G_copy = copy(G)
         # indices of vertices of G without isolated vertices
         V_no_isolated = vcat(filter(c -> length(c) > 1, connected_components(G))...)
-        # println("Non-isolated vertices: ", length(V_no_isolated))
         if length(V_no_isolated) > 0
             G_copy = G[V_no_isolated]
         else
+            # if all vertices are isolated, keep them instead
             G_copy = G
         end
     else
@@ -80,6 +79,7 @@ function plot_graph(G, graph_name, use_complement=false; S_to_color=[], remove_i
             draw( PNG(image_file, 100cm, 100cm), gplot(G_copy, NODESIZE=0.05/sqrt(nv(G_copy)), layout=layout, nodelabel=node_label) )
         end
     else
+        # plot the specified set of vertices S_to_color in a different color
         V = vertices(G_copy)
         color_map = [V[i] in S_to_color for i in 1:nv(G_copy)] .+ 1
         draw( PNG(image_file, 100cm, 100cm), gplot(G_copy, NODESIZE=0.05/sqrt(nv(G_copy)), layout=layout, nodefillc=nodecolor[color_map], nodelabel=node_label) )

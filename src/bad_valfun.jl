@@ -18,18 +18,15 @@ function find_bad_val(G)
     @variable(model, v[subsets] >= 0)
     @variable(model, w[1:n] >= 1)
     for s in powerset(N, 1)
-        # for i in s
-        #     @constraint(model, v[s] - v[del_lp(G, s, i)] >= w[i])
-        # end
         for i in setdiff(N, s)
-            @constraint(model, v[s] <= v[sort(vcat(s, [i]))])
+            @constraint(model, v[s] <= v[sort(vcat(s, [i]))])  # Lemma 2(1)
         end
     end
     for s in powerset(N, 1, floor(Int64, n/2))
         disconnected_vertices = del_set(G, N, s)  # the set of vertices disconnected to s
         for t in powerset(setdiff(N, s), 1)
             if issubset(t, disconnected_vertices)
-                @constraint(model, v[s] + v[t] == v[sort(vcat(s, t))])
+                @constraint(model, v[s] + v[t] == v[sort(vcat(s, t))])  # Lemma 2(2)
             # else
             #     @constraint(model, v[s] + v[t] >= v[sort(vcat(s, t))])  # subadditivity
             end
@@ -37,8 +34,8 @@ function find_bad_val(G)
     end
 
     for i in N
-        @constraint(model, v[N] - v[del_lp(G, N, i)] == w[i])
-        @constraint(model, v[[i]] >= w[i])
+        @constraint(model, v[N] - v[del_lp(G, N, i)] == w[i])  # discard rule
+        @constraint(model, v[[i]] >= w[i])  # Lemma 2(3)
     end
     @constraint(model, v[Int64[]] == 0)
     @objective(model, Min, v[N])
@@ -77,36 +74,30 @@ function del_set(G, S, vertices)
 end
 
 #-----------------------------------------
-use_complement = false
-graph_name = "ivan-6-bad"
+use_complement = true
+graph_name = "pruned-15-2"
 family = "chordal"
 G = load_family_graph(graph_name, family, use_complement)
 
-# plot_graph(G, graph_name, use_complement)
-
+# plot_graph(G, graph_name, use_complement; add_label=true)
 n = nv(G)
 println(graph_name, " ", use_complement)
 println(n)
 println(ne(G))
 
-# w = ones(n)
-# find_bad_val(G, w)
-
-# find_bad_val_rand(G)
-
 bad_w, bad_val, sdp_sol = find_bad_val(G)
-print_valfun(bad_val, n)
+# print_valfun(bad_val, n)
 θ = sdp_sol.value
 val = valfun(Matrix(sdp_sol.Q))
 
 # check if bad_val is good or bad (whether each vertex is in some max stable set)
 println("stable set test")
 stable_set_test(G, bad_w, θ, bad_val)
-println("theta test")
-theta_test(G, bad_w, θ, bad_val; solver="SCS")
+# println("theta test")
+# theta_test(G, bad_w, θ, bad_val; solver="SCS")
 
-println("Testing subadditivity...")
-test_subadditivity(θ, 1:n, bad_val; ϵ=1e-6)
+# println("Testing subadditivity...")
+# test_subadditivity(θ, 1:n, bad_val; ϵ=1e-6)
 
 # println("Testing subadditivity...")
 # test_subadditivity(θ, 1:n, val; ϵ=1e-6)
