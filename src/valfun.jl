@@ -118,7 +118,7 @@ end
 # Solve max stable set by solving an LP over the clique polytope (QSTAB) by
 # finding all maximal stable sets (stable sets that are not subsets of other stable
 # sets) and adding corresponding constraints
-# Return all optimal dual solutions and the corresponding cliques
+# Return all optimal dual BFS and the corresponding cliques
 function qstab_lp(G, w; verbose=false)
     n = nv(G)
     E = collect(edges(G))
@@ -164,7 +164,7 @@ end
 
 # Solve max stable set by starting with the fractional stable set polytope (edge
 # polytope) and adding clique cutting planes by solving auxiliary problems
-# Return an optimal dual solution and the corresponding cliques
+# Return all optimal dual BFS and the corresponding cliques
 function qstab_lp_cutting_planes(G, w; verbose=false)
     n = nv(G)
     E = collect(edges(G))
@@ -201,7 +201,7 @@ function qstab_lp_cutting_planes(G, w; verbose=false)
             push!(cons, @constraint(model, sum(x[clique_to_add]) <= 1))
         end
     end
-    return (x=value.(x), value=objective_value(model), λ=-dual.(cons), cliques=cliques)
+    return (x=value.(x), value=objective_value(model), λ_ext_points=dual_extreme_points(model), cliques=cliques)
 end
 
 

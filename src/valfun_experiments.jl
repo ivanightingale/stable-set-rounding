@@ -7,7 +7,7 @@ include("graph_utils.jl")
 # G = load_dimacs_graph(graph_name, use_complement)
 
 use_complement = false
-graph_name = "ivan-6-bad"
+graph_name = "ivan-7-bad"
 family = "chordal"
 G = load_family_graph(graph_name, family, use_complement)
 
@@ -19,16 +19,17 @@ println(n)
 println(ne(G))
 
 # Weight Vector
-# w = ones(n)
-w = [2, 1, 1, 1, 1, 1]  # for ivan-6-bad
+w = ones(n)
+# w = [2, 1, 1, 1, 1, 1]  # for ivan-6-bad
 # w = [1, 1, 1, 1, 2, 2, 1]  # for ivan-7-bad
 
 sol = qstab_lp(G, w; verbose=false)
 θ = sol.value
 println(θ)
-failure_count = test_qstab_valfuns(G, w, θ, sol.λ_ext_points, sol.cliques; use_theta=false)
+failure_count = test_qstab_valfuns(G, w, θ, sol.λ_ext_points, sol.cliques; use_theta=true)
 println("Number of failed extreme points: ", failure_count, "; total extreme points: ", length(sol.λ_ext_points))
 
+println("Testing the interior point...")
 λ_interior = sum(sol.λ_ext_points) / length(sol.λ_ext_points)
 val = valfun_qstab(λ_interior, sol.cliques)
 val_qstab_sdp = valfun(qstab_to_sdp(G, w, λ_interior, sol.cliques))

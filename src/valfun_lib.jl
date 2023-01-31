@@ -105,9 +105,9 @@ function fixed_point_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbo
     if verbose && n_iter > 0
         println("Fixed point discard complete after ", n_iter, " round(s). Remaining vertices: ", prev_size)
     end
-    # if n_iter > 1
-    #     println("Warning! More than 1 iterations of discarding observed.")
-    # end
+    if n_iter > 1
+        println("Warning! More than 1 iterations of discarding observed.")
+    end
 end
 
 # apply tabu_valfun() to pick n_rounds number of vertices, then discard vertices that should be discarded;
@@ -118,26 +118,30 @@ function tabu_valfun_test(G, w, θ, val; use_theta=false, n_rounds=0, ϵ=1e-6, s
     # discard bad vertices in the resulting set
     fixed_point_discard!(G, w, θ, val, S, w' * x_stable; ϵ=ϵ, verbose=verbose)
 
+    if verbose
+        println("Discarding complete. Testing starts...")
+    end
+
     if use_theta
-        return theta_test(G, w, θ, val, S, x_stable; ϵ=ϵ, solver=solver, solver_ϵ=solver_ϵ)
+        return theta_test(G, w, θ, val, S, x_stable; ϵ=ϵ, solver=solver, solver_ϵ=solver_ϵ, verbose=verbose)
     else
-        return stable_set_test(G, w, θ, val, S, x_stable; ϵ=ϵ)
+        return stable_set_test(G, w, θ, val, S, x_stable; ϵ=ϵ, verbose=verbose)
     end
 end
 
 
 # verify each vertex in S is in some maximum stable set by picking it first and
 # then iteratively discarding and picking (as in tabu_valfun)
-function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(nv(G)); ϵ=1e-4)
+function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(nv(G)); ϵ=1e-4, verbose=false)
     is_success = true
     for first_v in S
         T = copy(S)
         x = copy(initial_x_stable)
         pick_vertex!(G, T, x; v_to_pick=first_v)
         current_weight = w' * x
-        # pick vertices until exhausted
+        # discard and pick vertices until exhausted
         while true
-            fixed_point_discard!(G, w, θ, val, T, current_weight; ϵ=ϵ, verbose=false)
+            fixed_point_discard!(G, w, θ, val, T, current_weight; ϵ=ϵ, verbose=verbose)
             if !isempty(T)
                 pick_vertex!(G, T, x)
                 current_weight = w' * x
@@ -146,8 +150,10 @@ function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=fal
             end
         end
         if current_weight < θ - ϵ
-            println("Warning! Original theta: ", θ, ". When picking vertices starting with ", string(first_v), ", final weight is ", current_weight)
+            println("Warning! When picking vertices starting with ", string(first_v), ", final weight is ", current_weight, "; original theta: ", θ)
             is_success = false
+        elseif verbose
+            println("When picking vertices starting with ", string(first_v), ", final weight is ", current_weight)
         end
     end
     return is_success
@@ -155,7 +161,7 @@ end
 
 # verify each vertex in S is in some maximum stable set by picking it and
 # computing the theta value of the remaining subgraph
-function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); ϵ=1e-6, solver="SCS", solver_ϵ=1e-7)
+function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); ϵ=1e-6, solver="SCS", solver_ϵ=1e-7, verbose=false)
     n = nv(G)
     is_success = true
     for first_v in S
@@ -164,24 +170,27 @@ function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); �
         pick_vertex!(G, T, x; v_to_pick=first_v)
         current_weight = w' * x
         # compute theta on the subgraph G[T]
-        sol = dualSDP(G[T], w[T]; solver=solver, ϵ=solver_ϵ, verbose=false)
+        sol = dualSDP(G[T], w[T]; solver=solver, ϵ=solver_ϵ, verbose=verbose)
         θ_T  = sol.value
         val_T = val(T)
         if abs(val_T - θ_T) > ϵ || abs(θ - θ_T) > w[first_v] + current_weight + ϵ
-            println("Warning! Original theta: ", θ, ". When ", string(first_v), " with weight ", w[first_v], " is picked, current weight: ", current_weight, "; remaining value: ", val_T, "; remaining theta: ", θ_T)
+            println("Warning! When ", string(first_v), " with weight ", w[first_v], " is picked, currently selected weight: ", current_weight, "; remaining value: ", val_T, "; remaining theta: ", θ_T, "; original theta: ", θ)
             is_success = false
+        elseif verbose
+            println("When ", string(first_v), " with weight ", w[first_v], " is picked, remaining value: ", val_T, "; remaining theta: ", θ_T)
         end
     end
     return is_success
 end
 
 
+# run a tabu_valfun_test for each extreme point and count the number of points that failed
 function test_qstab_valfuns(G, w, θ, λ_ext_points, cliques; use_theta=false)
     failure_count = 0
     for (i, λ) in enumerate(λ_ext_points)
-        val = valfun_qstab(λ, cliques)
+        val_qstab = valfun_qstab(λ, cliques)
         val_qstab_sdp = valfun(qstab_to_sdp(G, w, λ, cliques))
-        if !tabu_valfun_test(G, w, θ, val; use_theta=use_theta, ϵ=1e-6, solver="Mosek", solver_ϵ=1e-9, verbose=false) || !tabu_valfun_test(G, w, θ, val_qstab_sdp; use_theta=use_theta, ϵ=1e-6, solver="Mosek", solver_ϵ=1e-9, verbose=false)
+        if !tabu_valfun_test(G, w, θ, val_qstab; use_theta=use_theta, ϵ=1e-6, solver="Mosek", solver_ϵ=1e-9, verbose=false) || !tabu_valfun_test(G, w, θ, val_qstab_sdp; use_theta=use_theta, ϵ=1e-6, solver="Mosek", solver_ϵ=1e-9, verbose=false)
             failure_count += 1
         end
     end
@@ -189,52 +198,4 @@ function test_qstab_valfuns(G, w, θ, λ_ext_points, cliques; use_theta=false)
 end
 
 
-# test the subadditivity of a list of value functions on the subset S
-# the value functions should be ordered in terms of accuracy, with the more
-# inaccurate (but efficient) in the front
-function test_subadditivity(θ, S, valfuns...; ϵ=1e-4)
-    n = length(S)
-    for s in powerset(S, 1, floor(Int64, n/2))
-        for t in powerset(setdiff(S, s), 1)
-            test_sets_subadditivity(s, t, valfuns...; ϵ=ϵ)
-        end
-    end
-end
 
-function random_test_subadditivity(θ, S, valfuns...; n_iter=10000, ϵ=1e-4)
-    n = length(S)
-    for i in 1:n_iter
-        s_size = rand(1:floor(Int64, n/2))
-        s = rand(S, s_size)
-        t_set = setdiff(S, s)
-        t_size = rand(1:length(t_set))
-        t = rand(t_set, t_size)
-        test_sets_subadditivity(s, t, valfuns...; ϵ=ϵ)
-    end
-end
-
-# test the subadditivity of a list of value functions on two sets
-# the value functions should be ordered in terms of accuracy, with the more
-# inaccurate (but efficient) in the front
-function test_sets_subadditivity(s, t, valfuns...; ϵ=1e-4)
-    st = sort(vcat(s, t))
-    val_s = nothing
-    val_t = nothing
-    val_st = nothing
-    violated = true
-
-    for val in valfuns
-        val_s = val(s)
-        val_t = val(t)
-        val_st = val(st)
-        if(val_s + val_t >= val_st - ϵ)
-            violated = false
-            break
-        end
-    end
-
-    if violated
-        println("Warning! Value of ", s, " is ", val_s, ", value of ", t, " is ", val_t, "; value of union is ", val_st, ". The difference is ", val_st - val_s - val_t)
-    end
-    return !violated
-end
