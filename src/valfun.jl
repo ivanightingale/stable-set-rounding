@@ -117,53 +117,6 @@ end
 
 # Solve max stable set by solving an LP over the clique polytope (QSTAB) by
 # finding all maximal stable sets (stable sets that are not subsets of other stable
-# sets) and adding corresponding constraints
-# Return all optimal dual BFS and the corresponding cliques
-function qstab_lp(G, w; verbose=false)
-    n = nv(G)
-    E = collect(edges(G))
-    model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => verbose, "LogToConsole" => verbose))
-    @variable(model, x[1:n] >= 0)
-
-    # find unweighted max stable set number
-    α = Int(max_clique(G, ones(n)).value)
-
-    cons = Vector{ConstraintRef}(undef, 0)
-    cliques = Vector{Vector{Int64}}(undef, 0)
-
-    # find all maximal cliques
-    clique_lists = vietorisrips(adjacency_matrix(G), α)
-    for k in α:-1:1
-        k_cliques = keys(clique_lists[k])
-        for i in 1:length(k_cliques)
-            clique_to_add = sort(collect(k_cliques[i]))
-            to_add = true
-            for j in 1:length(cliques)
-                existing_clique = cliques[j]
-                # do not add the new clique if it is the subset of an already added clique
-                if issubset(clique_to_add, existing_clique)
-                    to_add = false
-                    break
-                end
-            end
-            if to_add
-                push!(cliques, clique_to_add)
-            end
-        end
-    end
-    # add corresponding constraints
-    for c in cliques
-        push!(cons, @constraint(model, sum(x[c]) <= 1))
-    end
-    println(cliques)
-    @objective(model, Max, w' * x)
-    optimize!(model)
-
-    return (x=value.(x), value=objective_value(model), λ_ext_points=dual_extreme_points(model), cliques=cliques)
-end
-
-# Solve max stable set by solving an LP over the clique polytope (QSTAB) by
-# finding all maximal stable sets (stable sets that are not subsets of other stable
 # sets) and adding corresponding constraints.
 # Return all optimal dual BFS and the corresponding cliques
 function qstab_lp(G, w; verbose=false)
@@ -179,15 +132,14 @@ function qstab_lp(G, w; verbose=false)
     cliques = Vector{Vector{Int64}}(undef, 0)
 
     # obtain a tuple where the i-th entry contains all cliques of G with size i
-    clique_lists = vietorisrips(adjacency_matrix(G), α)
+    clique_lists_by_size = vietorisrips(adjacency_matrix(G), α)
     # find all maximal cliques
     for k in α:-1:1
-        k_cliques = keys(clique_lists[k])
-        for i in 1:length(k_cliques)
-            clique_to_add = sort(collect(k_cliques[i]))
+        k_cliques = keys(clique_lists_by_size[k])
+        for c in k_cliques
+            clique_to_add = sort(collect(c))
             to_add = true
-            for j in 1:length(cliques)
-                existing_clique = cliques[j]
+            for existing_clique in cliques
                 # do not add the new clique if it is a subset of an already added clique
                 if issubset(clique_to_add, existing_clique)
                     to_add = false
@@ -285,7 +237,8 @@ function is_clique(G, S)
 end
 
 
-# find all extreme points of the optimal face in the dual of model which has been solved to optimality
+# Find all extreme points of the optimal face in the dual of model. Model needs to be
+# already solved to optimality.
 function dual_extreme_points(model)
     opt_val = objective_value(model)
     println("Dualizing...")

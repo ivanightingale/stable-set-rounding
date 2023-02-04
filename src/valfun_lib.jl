@@ -96,7 +96,7 @@ end
 function fixed_point_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbose=true)
     prev_size = Inf
     n_iter = 0
-    while length(S) < prev_size
+    while length(S) < prev_size  # check whether fixed point has not been reached
         prev_size = length(S)
         set_value_discard!(G, w, θ, val, S, current_weight; ϵ, verbose)
         n_iter += 1
@@ -104,29 +104,38 @@ function fixed_point_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbo
     n_iter -= 1
     if verbose && n_iter > 0
         println("Fixed point discard complete after ", n_iter, " round(s). Remaining vertices: ", prev_size)
-    end
-    if n_iter > 1
-        println("Warning! More than 1 iterations of discarding observed.")
-    end
+        if n_iter > 1
+            println("Warning! More than 1 iterations of discarding observed.")
+        end
+    end 
 end
 
 # apply tabu_valfun() to pick n_rounds number of vertices, then discard vertices that should be discarded;
 # after that, for each vertex in the remaining set, test whether it is in some maximum stable set
 function tabu_valfun_test(G, w, θ, val; use_theta=false, n_rounds=0, ϵ=1e-6, solver="SCS", solver_ϵ=1e-7, graph_name=nothing, use_complement=nothing, verbose=false)
-    # first, pick a specified number of vertices with tabu_valfun()
+    # First, pick a specified number of vertices with tabu_valfun().
     x_stable, S = tabu_valfun(G, w, θ, val; max_rounds=n_rounds, ϵ=ϵ, verbose=verbose)
-    # discard bad vertices in the resulting set
+    # Discard bad vertices in the resulting set.
     fixed_point_discard!(G, w, θ, val, S, w' * x_stable; ϵ=ϵ, verbose=verbose)
 
     if verbose
         println("Discarding complete. Testing starts...")
     end
 
+    is_success = nothing
     if use_theta
-        return theta_test(G, w, θ, val, S, x_stable; ϵ=ϵ, solver=solver, solver_ϵ=solver_ϵ, verbose=verbose)
+        is_success = theta_test(G, w, θ, val, S, x_stable; ϵ=ϵ, solver=solver, solver_ϵ=solver_ϵ, verbose=verbose)
     else
-        return stable_set_test(G, w, θ, val, S, x_stable; ϵ=ϵ, verbose=verbose)
+        is_success = stable_set_test(G, w, θ, val, S, x_stable; ϵ=ϵ, verbose=verbose)
     end
+    if verbose
+        if is_success
+            println("valfun test passed")
+        else
+            println("valfun test failed")
+        end
+    end
+    return is_success
 end
 
 
@@ -150,10 +159,12 @@ function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=fal
             end
         end
         if current_weight < θ - ϵ
-            println("Warning! When picking vertices starting with ", string(first_v), ", final weight is ", current_weight, "; original theta: ", θ)
             is_success = false
-        elseif verbose
-            println("When picking vertices starting with ", string(first_v), ", final weight is ", current_weight)
+            if verbose
+               println("Warning! When picking vertices starting with ", string(first_v), ", final weight is ", current_weight, "; original theta: ", θ)
+           end
+        # elseif verbose
+        #     println("When picking vertices starting with ", string(first_v), ", final weight is ", current_weight)
         end
     end
     return is_success
@@ -174,17 +185,19 @@ function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); �
         θ_T  = sol.value
         val_T = val(T)
         if abs(val_T - θ_T) > ϵ || abs(θ - θ_T) > w[first_v] + current_weight + ϵ
-            println("Warning! When ", string(first_v), " with weight ", w[first_v], " is picked, currently selected weight: ", current_weight, "; remaining value: ", val_T, "; remaining theta: ", θ_T, "; original theta: ", θ)
             is_success = false
-        elseif verbose
-            println("When ", string(first_v), " with weight ", w[first_v], " is picked, remaining value: ", val_T, "; remaining theta: ", θ_T)
+            if verbose
+                println("Warning! When ", string(first_v), " with weight ", w[first_v], " is picked, currently selected weight: ", current_weight, "; remaining value: ", val_T, "; remaining theta: ", θ_T, "; original theta: ", θ)
+            end
+        # elseif verbose
+        #     println("When ", string(first_v), " with weight ", w[first_v], " is picked, remaining value: ", val_T, "; remaining theta: ", θ_T)
         end
     end
     return is_success
 end
 
 
-# run a tabu_valfun_test for each extreme point and count the number of points that failed
+# Run a tabu_valfun_test for each dual solutions in λ_ext_points, and count the number of points that failed.
 function test_qstab_valfuns(G, w, θ, λ_ext_points, cliques; use_theta=false)
     failure_count = 0
     for (i, λ) in enumerate(λ_ext_points)
