@@ -162,9 +162,57 @@ function qstab_lp(G, w; verbose=false)
     return (x=value.(x), value=objective_value(model), λ_ext_points=dual_extreme_points(model), cliques=cliques)
 end
 
-# Solve max stable set by starting with the fractional stable set polytope (edge
-# polytope) and adding clique cutting planes by solving auxiliary problems
+# Solve max stable set by solving an LP over the clique polytope (QSTAB) by
+# finding all maximal stable sets (stable sets that are not subsets of other stable
+# sets) and adding corresponding constraints.
 # Return all optimal dual BFS and the corresponding cliques
+function qstab_lp(G, w; verbose=false)
+    n = nv(G)
+    E = collect(edges(G))
+    model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => verbose, "LogToConsole" => verbose))
+    @variable(model, x[1:n] >= 0)
+
+    # find unweighted max stable set number
+    α = Int(max_clique(G, ones(n)).value)
+
+    cons = Vector{ConstraintRef}(undef, 0)
+    cliques = Vector{Vector{Int64}}(undef, 0)
+
+    # obtain a tuple where the i-th entry contains all cliques of G with size i
+    clique_lists = vietorisrips(adjacency_matrix(G), α)
+    # find all maximal cliques
+    for k in α:-1:1
+        k_cliques = keys(clique_lists[k])
+        for i in 1:length(k_cliques)
+            clique_to_add = sort(collect(k_cliques[i]))
+            to_add = true
+            for j in 1:length(cliques)
+                existing_clique = cliques[j]
+                # do not add the new clique if it is a subset of an already added clique
+                if issubset(clique_to_add, existing_clique)
+                    to_add = false
+                    break
+                end
+            end
+            if to_add
+                push!(cliques, clique_to_add)
+            end
+        end
+    end
+    # add corresponding constraints
+    for c in cliques
+        push!(cons, @constraint(model, sum(x[c]) <= 1))
+    end
+    println(cliques)
+    @objective(model, Max, w' * x)
+    optimize!(model)
+
+    return (x=value.(x), value=objective_value(model), λ_ext_points=dual_extreme_points(model), cliques=cliques)
+end
+
+# Solve max stable set by starting with the fractional stable set polytope (edge
+# polytope) and adding clique constraint cutting planes by solving auxiliary problems.
+# Return all optimal dual BFS and the corresponding cliques.
 function qstab_lp_cutting_planes(G, w; verbose=false)
     n = nv(G)
     E = collect(edges(G))
@@ -261,14 +309,33 @@ function qstab_to_sdp(G, w, λ, cliques)
     E = collect(edges(G))
     val = valfun_qstab(λ, cliques)
     v = [val(i) for i in 1:n]
-    Q = sparse(collect(1:n), fill(i0, n), -v, i0, i0) + sparse(collect(1:n), collect(1:n), v, i0, i0) * 2 - Diagonal([w; 0])
+    Q = sparse(collect(1:n), fill(i0, n), -v, i0, i0) + 2 * sparse(collect(1:n), collect(1:n), v, i0, i0) - Diagonal([w; 0])
     for e in E
         i = src(e)
         j = dst(e)
         Q[i, j] = sum([λ[k] for (k, c) in enumerate(cliques) if(i in c && j in c)])
     end
-    Q[i0, i0] = 0
+    Q[i0, i0] = sum(λ)
     Q = Symmetric(Q)
     # display(Q)
     return Matrix(Q)
+end
+
+
+function sdp_to_qstab(Q, w, cliques; solver="SCS")
+    n = length(w)
+    i0 = n + 1
+    model = theta_sdp_model(solver=solver)
+    @variable(model, λ[cliques] >= 0)
+    # @constraint(model, [i in 1:length(w)], sum(λ[c] for c in cliques if i in c) >= w[i])
+    @constraint(model, sum(λ) == Q[i0, i0])
+    @constraint(model, [i in 1:length(w)], 2 * sum(λ[c] for c in cliques if i in c) == Q[i, i] + w[i])
+    for i in 1:length(w)
+        for j in 1:(i - 1)
+            @constraint(model, sum(λ[c] for c in cliques if i in c && j in c) == Q[i, j])
+        end
+    end
+    optimize!(model)
+    # println(value.(λ))
+    println(solution_summary(model))
 end

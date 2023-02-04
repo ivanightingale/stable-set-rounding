@@ -196,6 +196,3 @@ function test_qstab_valfuns(G, w, θ, λ_ext_points, cliques; use_theta=false)
     end
     return failure_count
 end
-
-
-

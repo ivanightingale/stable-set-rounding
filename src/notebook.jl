@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.19
+# v0.19.22
 
 using Markdown
 using InteractiveUtils
@@ -36,6 +36,9 @@ end
 # ╔═╡ cdf145d2-a2fe-4bec-af04-0cb922256e18
 c = vietorisrips(adjacency_matrix(G), 4)
 
+# ╔═╡ da28bb5c-ced3-4bd3-8282-ed4171de75f7
+keys(c[3])
+
 # ╔═╡ 03bb15b9-4993-4a1e-b3bc-9cfe0ebc22dd
 keys(c[3])[1]
 
@@ -60,6 +63,7 @@ end
 # ╠═bf5105c8-9932-46de-8a1d-f6493606465e
 # ╠═916b5b87-8cc6-4665-8d68-bfd2450eb15e
 # ╠═cdf145d2-a2fe-4bec-af04-0cb922256e18
+# ╠═da28bb5c-ced3-4bd3-8282-ed4171de75f7
 # ╠═03bb15b9-4993-4a1e-b3bc-9cfe0ebc22dd
 # ╠═ac51c2b2-574a-4236-b841-38bcf32a66f5
 # ╠═55ff3ea8-7718-4ed8-bac0-6962de9aabd9

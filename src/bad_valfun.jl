@@ -74,10 +74,11 @@ function del_set(G, S, vertices)
 end
 
 #-----------------------------------------
-use_complement = true
-graph_name = "pruned-15-2"
+use_complement = false
+graph_name = "ivan-6-bad"
 family = "chordal"
 G = load_family_graph(graph_name, family, use_complement)
+# G, graph_name = generate_family_graph("hole", 6, use_complement)
 
 # plot_graph(G, graph_name, use_complement; add_label=true)
 n = nv(G)
@@ -91,13 +92,7 @@ bad_w, bad_val, sdp_sol = find_bad_val(G)
 val = valfun(Matrix(sdp_sol.Q))
 
 # check if bad_val is good or bad (whether each vertex is in some max stable set)
-println("stable set test")
-stable_set_test(G, bad_w, θ, bad_val)
-# println("theta test")
-# theta_test(G, bad_w, θ, bad_val; solver="SCS")
-
-# println("Testing subadditivity...")
-# test_subadditivity(θ, 1:n, bad_val; ϵ=1e-6)
-
-# println("Testing subadditivity...")
-# test_subadditivity(θ, 1:n, val; ϵ=1e-6)
+# println("stable set test")
+# stable_set_test(G, bad_w, θ, bad_val)
+println("theta test")
+theta_test(G, bad_w, θ, bad_val; solver="SCS")
