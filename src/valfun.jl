@@ -116,8 +116,8 @@ function valfun_qstab(λ, cliques)
 end
 
 # Solve max stable set by solving an LP over the clique polytope (QSTAB) by
-# finding all maximal stable sets (stable sets that are not subsets of other stable
-# sets) and adding corresponding constraints.
+# finding all maximal cliques (cliques that are not subsets of other cliques)
+# and adding corresponding constraints.
 # Return all optimal dual BFS and the corresponding cliques
 function qstab_lp(G, w; verbose=false)
     n = nv(G)
@@ -156,6 +156,41 @@ function qstab_lp(G, w; verbose=false)
         push!(cons, @constraint(model, sum(x[c]) <= 1))
     end
     println(cliques)
+    @objective(model, Max, w' * x)
+    optimize!(model)
+
+    return (x=value.(x), value=objective_value(model), λ_ext_points=dual_extreme_points(model), cliques=cliques)
+end
+
+
+# Solve max stable set by solving an LP over the clique polytope (QSTAB) with constraints of all cliques (including
+# vertices).
+# Return all optimal dual BFS and the corresponding cliques
+function qstab_lp_all_cliques(G, w; verbose=false)
+    n = nv(G)
+    E = collect(edges(G))
+    model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => verbose, "LogToConsole" => verbose))
+    @variable(model, x[1:n] >= 0)
+
+    # find unweighted max stable set number
+    α = Int(max_clique(G, ones(n)).value)
+
+    cons = Vector{ConstraintRef}(undef, 0)
+    cliques = Vector{Vector{Int64}}(undef, 0)
+
+    # obtain a tuple where the i-th entry contains all cliques of G with size i
+    clique_lists_by_size = vietorisrips(adjacency_matrix(G), α)
+    # add constraints for all cliques
+    for k in 1:α
+        k_cliques = keys(clique_lists_by_size[k])
+        for c in k_cliques
+            clique_to_add = sort(collect(c))
+            push!(cliques, clique_to_add)
+            push!(cons, @constraint(model, sum(x[clique_to_add]) <= 1))
+        end
+    end
+    println(cliques)
+    println(cons)
     @objective(model, Max, w' * x)
     optimize!(model)
 
@@ -282,7 +317,7 @@ function sdp_to_qstab(Q, w, cliques; solver="SCS")
     @variable(model, λ[cliques] >= 0)
     # @constraint(model, [i in 1:length(w)], sum(λ[c] for c in cliques if i in c) >= w[i])
     @constraint(model, sum(λ) == Q[i0, i0])
-    @constraint(model, [i in 1:length(w)], 2 * sum(λ[c] for c in cliques if i in c) == Q[i, i] + w[i])
+    @constraint(model, [i in 1:n], 2 * sum(λ[c] for c in cliques if i in c) == Q[i, i] + w[i])
     for i in 1:length(w)
         for j in 1:(i - 1)
             @constraint(model, sum(λ[c] for c in cliques if i in c && j in c) == Q[i, j])

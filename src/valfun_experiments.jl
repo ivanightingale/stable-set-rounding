@@ -26,9 +26,9 @@ w = ones(n)
 # w = [1, 1, 1, 1, 2, 2, 1]  # for ivan-7-bad
 # w = [6, 1, 1, 1, 3.5, 3.5, 1, 3.5, 1, 4, 1, 1, 4, 2.5, 1]  # for connecting-15-2.co
 
-qstab_sol = qstab_lp(G, w; verbose=false)
+qstab_sol = qstab_lp_all_cliques(G, w; verbose=false)
 θ = qstab_sol.value
-println(θ)
+println("QSTAB LP value: ", θ)
 failure_count = test_qstab_valfuns(G, w, θ, qstab_sol.λ_ext_points, qstab_sol.cliques; use_theta=true)
 println("Number of failed extreme points: ", failure_count, "; total extreme points: ", length(qstab_sol.λ_ext_points))
 λ_interior = sum(qstab_sol.λ_ext_points) / length(qstab_sol.λ_ext_points)
@@ -38,20 +38,19 @@ println("Testing the interior point...")
 tabu_valfun_test(G, w, θ, val; use_theta=false, ϵ=1e-6, solver="Mosek", solver_ϵ=1e-9, verbose=true)
 tabu_valfun_test(G, w, θ, val_qstab_sdp; use_theta=false, ϵ=1e-6, solver="Mosek", solver_ϵ=1e-9, verbose=false)
 
-
-# sdp_sol = dualSDP(G, w; solver="Mosek", ϵ=1e-12)
-# θ = sdp_sol.value
-# println("SDP Value: ", θ)
-# Q = Matrix(sdp_sol.Q)
-# display(Q)
-# val = valfun(Q)
-# tabu_valfun_test(G, w, θ, val)
+sdp_sol = dualSDP(G, w; solver="Mosek", ϵ=1e-12)
+θ = sdp_sol.value
+println("SDP Value: ", θ)
+Q = Matrix(sdp_sol.Q)
+display(Q)
+val = valfun(Q)
+tabu_valfun_test(G, w, θ, val)
 
 # Q_qstab = qstab_to_sdp(G, w, λ_interior, qstab_sol.cliques)
 # println(λ_interior)
 # display(Q_qstab)
 # sdp_to_qstab(Q_qstab, w, qstab_sol.cliques; solver="Mosek")
-# sdp_to_qstab(Q, w, qstab_sol.cliques; solver="Mosek")
+sdp_to_qstab(Q, w, qstab_sol.cliques; solver="Mosek")
 
 # x_stable, _ = tabu_valfun(G, w, θ, val; ϵ=1e-7)
 # println(findall(x_stable))

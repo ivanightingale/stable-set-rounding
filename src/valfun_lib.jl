@@ -40,7 +40,7 @@ function tabu_valfun(G, w, θ, val; max_rounds=nv(G), ϵ=1e-4, verbose=true)
     S = collect(1:n)
     x_stable = falses(n)
     current_weight = 0
-    # vertex_value_discard!(w, val, S; ϵ=ϵ, verbose=verbose)
+    vertex_value_discard!(w, val, S; ϵ=ϵ, verbose=verbose)
     for i in 1:max_rounds
         fixed_point_discard!(G, w, θ, val, S, current_weight; ϵ, verbose)
         if !isempty(S)
@@ -76,6 +76,9 @@ function vertex_value_discard!(w, val, S; ϵ=1e-6, verbose=true)
             end
         end
     end
+    if verbose
+        println("Vertex value discard complete. Discarded ", length(T) - length(S), " vertices. Remaining vertices: ", length(S))
+    end
 end
 
 
@@ -94,6 +97,7 @@ end
 
 # repeatedly apply set_value_discard until no more vertices can be discarded
 function fixed_point_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbose=true)
+    original_size = length(S)
     prev_size = Inf
     n_iter = 0
     while length(S) < prev_size  # check whether fixed point has not been reached
@@ -103,7 +107,8 @@ function fixed_point_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbo
     end
     n_iter -= 1
     if verbose && n_iter > 0
-        println("Fixed point discard complete after ", n_iter, " round(s). Remaining vertices: ", prev_size)
+        n_discarded = original_size - prev_size
+        println("Fixed point discard complete after ", n_iter, " round(s). Discarded ", n_discarded, " vertices. Remaining vertices: ", prev_size)
         if n_iter > 1
             println("Warning! More than 1 iterations of discarding observed.")
         end
