@@ -27,13 +27,24 @@ function load_dimacs_graph(graph_name, use_complement=true)
     return G
 end
 
-function generate_family_graph(family, n, use_complement=false)
+function generate_family_graph(family, n, use_complement=false; k=n)
     if family == "wheel"
         graph_name = "wheel-" * string(n)
         G = wheel_graph(n)
     elseif family == "hole"
         graph_name = "hole-" * string(n)
         G = cycle_graph(n)
+    elseif family == "path"
+        graph_name = "path-" * string(n)
+        G = path_graph(n)
+    elseif family == "chain"
+        graph_name = string(k) * "-chain-" * string(n)
+        G = SimpleGraph(n, 0)
+        for i in 1 : (n / 2)
+            for j in 1:k
+                add_edge!(G, (i, n / 2 + 1 + mod(i + j - 2, n / 2)))
+            end
+        end
     end
     if use_complement
         G = complement(G)

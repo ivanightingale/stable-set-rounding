@@ -1,21 +1,6 @@
-using JuMP
-using LinearAlgebra, SparseArrays
-using Combinatorics
-using Graphs
+include("valfun_utils.jl")
+# include("graph_utils.jl")
 
-include("graph_utils.jl")
-
-
-del = (G,S,i) -> setdiff(S, vcat(neighbors(G,i), [i]))
-del! = (G,S,i) -> setdiff!(S, vcat(neighbors(G,i), [i]))
-
-
-function print_valfun(val, n, max_size=n)
-    subsets = powerset(1:n, 0, max_size)
-    for s in subsets
-        println(s, " ", val(s))
-    end
-end
 
 # rounding based on value function, a heuristics for general graphs
 function round_valfun(G, w, θ, val)
@@ -58,7 +43,7 @@ function tabu_valfun(G, w, θ, val; max_rounds=nv(G), ϵ=1e-4, verbose=true)
 end
 
 
-# pick a vertex in S (update the boolean vector x_stable) and update S
+# pick a vertex in S (default to the first vertex in S), then update the boolean vector x_stable and S
 function pick_vertex!(G, S, x_stable; v_to_pick=S[1])
     x_stable[v_to_pick] = true
     del!(G, S, v_to_pick)
@@ -117,7 +102,7 @@ end
 
 # apply tabu_valfun() to pick n_rounds number of vertices, then discard vertices that should be discarded;
 # after that, for each vertex in the remaining set, test whether it is in some maximum stable set
-function tabu_valfun_test(G, w, θ, val; use_theta=false, n_rounds=0, ϵ=1e-6, solver="SCS", solver_ϵ=1e-7, graph_name=nothing, use_complement=nothing, verbose=false)
+function tabu_valfun_test(G, w, θ, val; use_theta=false, n_rounds=0, ϵ=1e-6, solver="SCS", solver_ϵ=0, graph_name=nothing, use_complement=nothing, verbose=false)
     # First, pick a specified number of vertices with tabu_valfun().
     x_stable, S = tabu_valfun(G, w, θ, val; max_rounds=n_rounds, ϵ=ϵ, verbose=verbose)
     # Discard bad vertices in the resulting set.
@@ -135,20 +120,24 @@ function tabu_valfun_test(G, w, θ, val; use_theta=false, n_rounds=0, ϵ=1e-6, s
     end
     if verbose
         if is_success
-            println("valfun test passed")
+            println("****** Valfun test passed ******")
         else
-            println("valfun test failed")
+            println("****** Valfun test failed ******")
         end
     end
     return is_success
 end
 
 
-# verify each vertex in S is in some maximum stable set by picking it first and
-# then iteratively discarding and picking (as in tabu_valfun)
+# Verify each vertex in S is in some maximum stable set by picking it first and
+# then iteratively discarding and picking (as in tabu_valfun).
+# Note that good points could also fail since the picking is naive. To double check, use theta_test().
 function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(nv(G)); ϵ=1e-4, verbose=false)
     is_success = true
     for first_v in S
+        if verbose
+            println("**** Stable set test: vertex ", string(first_v), " ****")
+        end
         T = copy(S)
         x = copy(initial_x_stable)
         pick_vertex!(G, T, x; v_to_pick=first_v)
@@ -157,6 +146,9 @@ function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=fal
         while true
             fixed_point_discard!(G, w, θ, val, T, current_weight; ϵ=ϵ, verbose=verbose)
             if !isempty(T)
+                if verbose
+                    println("** Stable set test: picking vertex ", string(T[1]), " **")
+                end
                 pick_vertex!(G, T, x)
                 current_weight = w' * x
             else
@@ -177,7 +169,7 @@ end
 
 # verify each vertex in S is in some maximum stable set by picking it and
 # computing the theta value of the remaining subgraph
-function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); ϵ=1e-6, solver="SCS", solver_ϵ=1e-7, verbose=false)
+function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); ϵ=1e-6, solver="SCS", solver_ϵ=0, verbose=false)
     n = nv(G)
     is_success = true
     for first_v in S
@@ -186,7 +178,7 @@ function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); �
         pick_vertex!(G, T, x; v_to_pick=first_v)
         current_weight = w' * x
         # compute theta on the subgraph G[T]
-        sol = dualSDP(G[T], w[T]; solver=solver, ϵ=solver_ϵ, verbose=verbose)
+        sol = dualSDP(G[T], w[T]; solver=solver, ϵ=solver_ϵ, verbose=false)
         θ_T  = sol.value
         val_T = val(T)
         if abs(val_T - θ_T) > ϵ || abs(θ - θ_T) > w[first_v] + current_weight + ϵ
@@ -203,12 +195,12 @@ end
 
 
 # Run a tabu_valfun_test for each dual solutions in λ_ext_points, and count the number of points that failed.
-function test_qstab_valfuns(G, w, θ, λ_ext_points, cliques; use_theta=false)
+function test_qstab_valfuns(G, w, θ, λ_ext_points, cliques; use_theta=false, verbose=false)
     failure_count = 0
     for (i, λ) in enumerate(λ_ext_points)
         val_qstab = valfun_qstab(λ, cliques)
         val_qstab_sdp = valfun(qstab_to_sdp(G, w, λ, cliques))
-        if !tabu_valfun_test(G, w, θ, val_qstab; use_theta=use_theta, ϵ=1e-6, solver="Mosek", solver_ϵ=1e-9, verbose=false) || !tabu_valfun_test(G, w, θ, val_qstab_sdp; use_theta=use_theta, ϵ=1e-6, solver="Mosek", solver_ϵ=1e-9, verbose=false)
+        if !tabu_valfun_test(G, w, θ, val_qstab; use_theta=use_theta, ϵ=1e-6, solver="Mosek", solver_ϵ=0, verbose=verbose) || !tabu_valfun_test(G, w, θ, val_qstab_sdp; use_theta=use_theta, ϵ=1e-6, solver="Mosek", solver_ϵ=0, verbose=verbose)
             failure_count += 1
         end
     end
