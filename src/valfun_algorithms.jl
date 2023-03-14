@@ -18,8 +18,7 @@ function round_valfun(G, w, θ, val)
     return x_stable
 end
 
-# use value function to iteratively discard and pick vertices to form a stable
-# set
+# Use value function to iteratively discard and pick vertices to form a stable set.
 function tabu_valfun(G, w, θ, val; max_rounds=nv(G), ϵ=1e-4, verbose=true)
     n = nv(G)
     S = collect(1:n)
@@ -103,7 +102,8 @@ end
 # apply tabu_valfun() to pick n_rounds number of vertices, then discard vertices that should be discarded;
 # after that, for each vertex in the remaining set, test whether it is in some maximum stable set
 function tabu_valfun_test(G, w, θ, val; use_theta=false, n_rounds=0, ϵ=1e-6, solver="SCS", solver_ϵ=0, graph_name=nothing, use_complement=nothing, verbose=false)
-    # First, pick a specified number of vertices with tabu_valfun().
+    # First, pick a specified number of vertices with tabu_valfun(). If n_rounds=0, this will simply run
+    # vertex_value_discard!().
     x_stable, S = tabu_valfun(G, w, θ, val; max_rounds=n_rounds, ϵ=ϵ, verbose=verbose)
     # Discard bad vertices in the resulting set.
     fixed_point_discard!(G, w, θ, val, S, w' * x_stable; ϵ=ϵ, verbose=verbose)

@@ -5,7 +5,8 @@ function dualSDP(G, w; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     i0 = n + 1
     E = collect(edges(G))
-    model = theta_sdp_model(solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
+    model = Model()
+    set_sdp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
     @variable(model, t)
 
     @variable(model, λ[1:n])
@@ -52,7 +53,8 @@ function valfun_sdp_explicit(Q; solver="SCS", ϵ=0, feas_ϵ=0)
     A = Symmetric(Q[1:n,1:n])
     b = Q[1:n, i0]
     val = S -> begin
-        model = theta_sdp_model(solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=false)
+        model = Model()
+        set_sdp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=false)
         @variable(model, t)
         Q_I = vcat(hcat(t, b[S]'), hcat(b[S], A[S,S]))
         @constraint(model, Q_I in PSDCone())

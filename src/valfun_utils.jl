@@ -3,9 +3,9 @@ using LinearAlgebra, SparseArrays
 using Combinatorics
 using Graphs
 
-function theta_sdp_model(;solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
+function set_sdp_optimizer(model; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
     if solver == "COSMO"  # for larger graphs
-        model = Model(optimizer_with_attributes(COSMO.Optimizer, "decompose" => true, "max_iter" => 1000000, "verbose" => verbose))
+        set_optimizer(model, optimizer_with_attributes(COSMO.Optimizer, "decompose" => true, "max_iter" => 1000000, "verbose" => verbose))
         if ϵ > 0
             set_optimizer_attribute(model, "eps_abs", ϵ)
             set_optimizer_attribute(model, "eps_rel", ϵ)
@@ -15,7 +15,7 @@ function theta_sdp_model(;solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
             set_optimizer_attribute(model, "eps_dual_inf", feas_ϵ)
         end
     elseif solver == "SCS"
-        model = Model(optimizer_with_attributes(SCS.Optimizer, "max_iters" => 1000000, "verbose" => verbose))
+        set_optimizer(model, optimizer_with_attributes(SCS.Optimizer, "max_iters" => 1000000, "verbose" => verbose))
         if ϵ > 0
             set_optimizer_attribute(model, "eps_abs", ϵ)
             set_optimizer_attribute(model, "eps_rel", ϵ)
@@ -24,7 +24,7 @@ function theta_sdp_model(;solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
             set_optimizer_attribute(model, "eps_infeas", feas_ϵ)
         end
     elseif solver == "Mosek"
-        model = Model(optimizer_with_attributes(Mosek.Optimizer, "QUIET" => !verbose))
+        set_optimizer(model, optimizer_with_attributes(Mosek.Optimizer, "QUIET" => !verbose))
         if ϵ > 0
             set_optimizer_attribute(model, "MSK_DPAR_INTPNT_CO_TOL_REL_GAP", ϵ)
             set_optimizer_attribute(model, "MSK_DPAR_INTPNT_CO_TOL_MU_RED", ϵ)
@@ -35,7 +35,7 @@ function theta_sdp_model(;solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
             set_optimizer_attribute(model, "MSK_DPAR_INTPNT_CO_TOL_INFEAS", feas_ϵ)
         end
     elseif solver == "COPT"
-        model = Model(optimizer_with_attributes(COPT.ConeOptimizer, "Logging" => verbose, "LogToConsole" => false))
+        set_optimizer(model, optimizer_with_attributes(COPT.ConeOptimizer, "Logging" => verbose, "LogToConsole" => false))
         if ϵ > 0
             set_optimizer_attribute(model, "AbsGap", ϵ)
             set_optimizer_attribute(model, "RelGap", ϵ)
@@ -44,34 +44,36 @@ function theta_sdp_model(;solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
             set_optimizer_attribute(model, "FeasTol", feas_ϵ)
         end
     end
-    return model
 end
 
-function qstab_lp_model(;solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
-    if solver in ["COSMO", "SCS"]
-        model = theta_sdp_model(;solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
-    elseif solver == "Mosek"
-        model = Model(optimizer_with_attributes(Mosek.Optimizer, "QUIET" => !verbose))
-        if ϵ > 0
-            set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_REL_GAP", ϵ)
-            set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_MU_RED", ϵ)
+function set_lp_optimizer(model; solver="COPT", require_interior_point=false, ϵ=0, feas_ϵ=0, verbose=false)
+    if require_interior_point
+        if solver in ["COSMO", "SCS"]
+            set_sdp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
+        elseif solver == "Mosek"
+            set_optimizer(model, optimizer_with_attributes(Mosek.Optimizer, "QUIET" => !verbose))
+            if ϵ > 0
+                set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_REL_GAP", ϵ)
+                set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_MU_RED", ϵ)
+            end
+            if feas_ϵ > 0
+                set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_PFEAS", feas_ϵ)  # TODO: what are the differences?
+                set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_DFEAS", feas_ϵ)
+                set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_INFEAS", feas_ϵ)
+            end
         end
-        if feas_ϵ > 0
-            set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_PFEAS", feas_ϵ)  # TODO: what are the differences?
-            set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_DFEAS", feas_ϵ)
-            set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_INFEAS", feas_ϵ)
-        end
-    elseif solver == "COPT"
-        model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => verbose, "LogToConsole" => false))
-        if ϵ > 0
-            set_optimizer_attribute(model, "AbsGap", ϵ)
-            set_optimizer_attribute(model, "RelGap", ϵ)
-        end
-        if feas_ϵ > 0
-            set_optimizer_attribute(model, "FeasTol", feas_ϵ)
+    else
+        if solver == "COPT"
+            set_optimizer(model, optimizer_with_attributes(COPT.Optimizer, "Logging" => verbose, "LogToConsole" => verbose))
+            if ϵ > 0
+                set_optimizer_attribute(model, "AbsGap", ϵ)
+                set_optimizer_attribute(model, "RelGap", ϵ)
+            end
+            if feas_ϵ > 0
+                set_optimizer_attribute(model, "FeasTol", feas_ϵ)
+            end
         end
     end
-    return model
 end
 
 
@@ -107,21 +109,21 @@ function qstab_to_sdp(G, w, λ, cliques)
 end
 
 
-function sdp_to_qstab(Q, w, cliques; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
-    n = length(w)
-    i0 = n + 1
-    model = qstab_lp_model(solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
-    @variable(model, λ[cliques] >= 0)
-    @constraint(model, sum(λ) == Q[i0, i0])
-    @constraint(model, [i in 1:n], 2 * sum(λ[c] for c in cliques if i in c) == Q[i, i] + w[i])
-    for i in 1:n
-        for j in 1:(i - 1)
-            @constraint(model, sum(λ[c] for c in cliques if i in c && j in c) == Q[i, j])
-        end
-    end
-    # display(all_constraints(model; include_variable_in_set_constraints = true))
-    # println()
-    optimize!(model)
-    println(solution_summary(model))
-    return value.(λ)
-end
+# function sdp_to_qstab(Q, w, cliques; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
+#     n = length(w)
+#     i0 = n + 1
+#     model = qstab_lp_model(solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
+#     @variable(model, λ[cliques] >= 0)
+#     @constraint(model, sum(λ) == Q[i0, i0])
+#     @constraint(model, [i in 1:n], 2 * sum(λ[c] for c in cliques if i in c) == Q[i, i] + w[i])
+#     for i in 1:n
+#         for j in 1:(i - 1)
+#             @constraint(model, sum(λ[c] for c in cliques if i in c && j in c) == Q[i, j])
+#         end
+#     end
+#     # display(all_constraints(model; include_variable_in_set_constraints = true))
+#     # println()
+#     optimize!(model)
+#     println(solution_summary(model))
+#     return value.(λ)
+# end
