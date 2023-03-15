@@ -101,7 +101,7 @@ end
 
 # apply tabu_valfun() to pick n_rounds number of vertices, then discard vertices that should be discarded;
 # after that, for each vertex in the remaining set, test whether it is in some maximum stable set
-function tabu_valfun_test(G, w, θ, val; use_theta=false, n_rounds=0, ϵ=1e-6, solver="SCS", solver_ϵ=0, graph_name=nothing, use_complement=nothing, verbose=false)
+function tabu_valfun_test(G, w, θ, val; use_theta=false, n_rounds=0, ϵ=1e-6, solver="SCS", solver_ϵ=0, feas_ϵ=0, graph_name=nothing, use_complement=nothing, verbose=false)
     # First, pick a specified number of vertices with tabu_valfun(). If n_rounds=0, this will simply run
     # vertex_value_discard!().
     x_stable, S = tabu_valfun(G, w, θ, val; max_rounds=n_rounds, ϵ=ϵ, verbose=verbose)
@@ -111,10 +111,14 @@ function tabu_valfun_test(G, w, θ, val; use_theta=false, n_rounds=0, ϵ=1e-6, s
     if verbose
         println("Discarding complete. Testing starts...")
     end
-
-    is_success = nothing
+    if isempty(S)
+        if verbose
+            println("****** All vertices discarded, valfun test failed ******")
+        end
+        return false
+    end
     if use_theta
-        is_success = theta_test(G, w, θ, val, S, x_stable; ϵ=ϵ, solver=solver, solver_ϵ=solver_ϵ, verbose=verbose)
+        is_success = theta_test(G, w, θ, val, S, x_stable; ϵ=ϵ, solver=solver, solver_ϵ=solver_ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
     else
         is_success = stable_set_test(G, w, θ, val, S, x_stable; ϵ=ϵ, verbose=verbose)
     end
@@ -169,7 +173,7 @@ end
 
 # verify each vertex in S is in some maximum stable set by picking it and
 # computing the theta value of the remaining subgraph
-function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); ϵ=1e-6, solver="SCS", solver_ϵ=0, verbose=false)
+function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); ϵ=1e-6, solver="SCS", solver_ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     is_success = true
     for first_v in S
@@ -178,7 +182,7 @@ function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); �
         pick_vertex!(G, T, x; v_to_pick=first_v)
         current_weight = w' * x
         # compute theta on the subgraph G[T]
-        sol = dualSDP(G[T], w[T]; solver=solver, ϵ=solver_ϵ, verbose=false)
+        sol = dualSDP(G[T], w[T]; solver=solver, ϵ=solver_ϵ, feas_ϵ=feas_ϵ, verbose=false)
         θ_T  = sol.value
         val_T = val(T)
         if abs(val_T - θ_T) > ϵ || abs(θ - θ_T) > w[first_v] + current_weight + ϵ
@@ -205,4 +209,55 @@ function test_qstab_valfuns(G, w, θ, λ_ext_points, cliques; use_theta=false, v
         end
     end
     return failure_count
+end
+
+
+function tabu_valfun_compare(G, w, θ, val_1, val_2; n_rounds=0, ϵ=1e-6, verbose=false)
+    initial_x_1, S_1 = tabu_valfun(G, w, θ, val_1; max_rounds=n_rounds, ϵ=ϵ, verbose=verbose)
+    initial_x_2, S_2 = tabu_valfun(G, w, θ, val_2; max_rounds=n_rounds, ϵ=ϵ, verbose=verbose)
+    @assert S_1 == S_2
+    S_1_temp = copy(S_1)
+    S_2_temp = copy(S_2)
+    current_weight = w' * initial_x_1
+    fixed_point_discard!(G, w, θ, val_1, S_1, current_weight; ϵ=ϵ, verbose=verbose)
+    fixed_point_discard!(G, w, θ, val_2, S_2, current_weight; ϵ=ϵ, verbose=false)
+    if n_rounds == 0
+        @assert S_1 == S_1_temp
+        @assert S_2 == S_2_temp
+    end
+    @assert S_1 == S_2
+    if verbose
+        println("Discarding complete. Testing starts...")
+    end
+    for first_v in S_1
+        if verbose
+            println("**** Stable set compare: vertex ", string(first_v), " ****")
+        end
+        T_1 = copy(S_1)
+        T_2 = copy(S_2)
+        x_1 = copy(initial_x_1)
+        x_2 = copy(initial_x_2)
+        pick_vertex!(G, T_1, x_1; v_to_pick=first_v)
+        pick_vertex!(G, T_2, x_2; v_to_pick=first_v)
+        @assert T_1 == T_2
+        current_weight = w' * x_1
+        # discard and pick vertices until exhausted
+        while true
+            fixed_point_discard!(G, w, θ, val_1, T_1, current_weight; ϵ=ϵ, verbose=verbose)
+            fixed_point_discard!(G, w, θ, val_2, T_2, current_weight; ϵ=ϵ, verbose=false)
+            @assert T_1 == T_2
+            if !isempty(T_1)
+                if verbose
+                    println("** Stable set compare: picking vertex ", string(T_1[1]), " **")
+                end
+                pick_vertex!(G, T_1, x_1)
+                pick_vertex!(G, T_2, x_2)
+                current_weight = w' * x_1
+            else
+                break
+            end
+        end
+        @assert current_weight >= θ - ϵ
+    end
+    println("****** Valfuns equivalent ******") 
 end

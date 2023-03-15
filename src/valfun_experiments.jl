@@ -8,8 +8,8 @@ include("graph_utils.jl")
 # graph_name = "san200-0-7-2"
 # G = load_dimacs_graph(graph_name, use_complement)
 
-use_complement = true
-graph_name = "connecting-50-1"
+use_complement = false
+graph_name = "pruned-50-4"
 family = "chordal"
 G = load_family_graph(graph_name, family, use_complement)
 # G, graph_name = generate_family_graph("path", 5, use_complement; k=3)
@@ -35,17 +35,26 @@ println(w)
 ######################
 # QSTAB LP interior point value function vs. SDP value function
 ######################
-qstab_sol = qstab_lp_interior_point(G, w; use_all_cliques=false, solver="Mosek", ϵ=1e-9, verbose=false)
-θ = qstab_sol.value
-println("QSTAB LP value: ", θ)
+sdp_sol = dualSDP(G, w; solver="Mosek", ϵ=1e-12)
+θ = sdp_sol.value
+println("SDP Value: ", θ)
+Q = Matrix(sdp_sol.Q)
+val_sdp = valfun(Q)
+# print_valfun(val_sdp, n, 1)
+# tabu_valfun_test(G, w, sdp_sol.value, val_sdp; use_theta=false, ϵ=1e-8, verbose=true)
+
+qstab_sol = qstab_lp_interior_point(G, w; use_all_cliques=true, solver="Mosek", ϵ=1e-12, verbose=false)
+println("QSTAB LP value: ", qstab_sol.value)
 λ_interior = qstab_sol.λ
 # println(λ_interior)
 # qstab_sol = qstab_lp(G, w; use_all_cliques=false, ϵ=1e-9, verbose=false)
 # λ_interior_verify = sum(qstab_sol.λ_ext_points) / length(qstab_sol.λ_ext_points)
 # println(λ_interior_verify)
 val_qstab = valfun_qstab(λ_interior, qstab_sol.cliques)
-tabu_valfun_test(G, w, θ, val_qstab; use_theta=false, ϵ=1e-6, solver="Mosek", solver_ϵ=0, verbose=true)
+# print_valfun(val_qstab, n, 1)
+# tabu_valfun_test(G, w, qstab_sol.value, val_qstab; use_theta=false, ϵ=1e-6, verbose=true)
 
+tabu_valfun_compare(G, w, θ, val_sdp, val_qstab; ϵ=1e-8, verbose=true)
 
 ######################
 # QSTAB LP extreme points value functions verification
