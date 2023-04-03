@@ -35,7 +35,7 @@ function set_sdp_optimizer(model; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
             set_optimizer_attribute(model, "MSK_DPAR_INTPNT_CO_TOL_INFEAS", feas_ϵ)
         end
     elseif solver == "COPT"
-        set_optimizer(model, optimizer_with_attributes(COPT.ConeOptimizer, "Logging" => verbose, "LogToConsole" => false))
+        set_optimizer(model, optimizer_with_attributes(COPT.ConeOptimizer, "Logging" => Int(verbose), "LogToConsole" => Int(verbose)))
         if ϵ > 0
             set_optimizer_attribute(model, "AbsGap", ϵ)
             set_optimizer_attribute(model, "RelGap", ϵ)
@@ -64,7 +64,7 @@ function set_lp_optimizer(model; solver="COPT", require_interior_point=false, ϵ
         end
     else
         if solver == "COPT"
-            set_optimizer(model, optimizer_with_attributes(COPT.Optimizer, "Logging" => verbose, "LogToConsole" => verbose))
+            set_optimizer(model, optimizer_with_attributes(COPT.Optimizer, "Logging" => Int(verbose), "LogToConsole" => Int(verbose)))
             if ϵ > 0
                 set_optimizer_attribute(model, "AbsGap", ϵ)
                 set_optimizer_attribute(model, "RelGap", ϵ)
