@@ -86,14 +86,12 @@ Note: all data are on complements of the graphs
 | ----- | ------ | --- |   ----     |  ----- | ---- |
 |  800   |   111434  |  42.466  |  24  |  18   |  1  |
 
-faster than SCS, more PSD
 
 ## brock800-3
 | \|V\| | \|E\|  |  θ |  α  |   round_valfun   | tabu_valfun  |
 | ----- | ------ | --- |   ----     |  ----- | ---- |
 |  800   |   112267  |  42.242   |  25  |  19  |  1  |
 
-faster than SCS, more PSD
 
 ## brock800-4
 | \|V\| | \|E\|  |  θ |  α  |   round_valfun   | tabu_valfun  |
@@ -304,11 +302,11 @@ COSMO much faster than SCS
 | ----- | ------ | --- |   ----     |   ----- |   ------ |
 |  1000   |  254701  |  55.607  |  46*  |   45   |  1   |
 
-COSMO much faster than SCS
-
 
 ## p-hat1000-3
-
+| \|V\| | \|E\|  | θ  | α  |   round_valfun  |  tabu_valfun  |
+| ----- | ------ | --- |   ----     |   ----- |   ------ |
+|  1000   |  127754  |    |    |     |     |
 
 ## p-hat1500-1
 | \|V\| | \|E\|  | θ  | α  |   round_valfun  |  tabu_valfun  |

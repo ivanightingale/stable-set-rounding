@@ -5,14 +5,16 @@ include("valfun_algorithms.jl")
 include("graph_utils.jl")
 
 use_complement = true
-graph_name = "hamming10-2"
+graph_name = "hamming8-2"
 G = load_dimacs_graph(graph_name, use_complement)
 
-# use_complement = false
-# graph_name = "ivan-6"
-# family = "perfect"
+# use_complement = true
+# graph_name = "connecting-200-4"
+# family = "chordal"
 # G = load_family_graph(graph_name, family, use_complement)
-# G, graph_name = generate_family_graph("path", 5, use_complement; k=3)
+
+# use_complement = false
+# G, graph_name = generate_family_graph("hole", 10, use_complement; k=3)
 
 # plot_graph(G, graph_name, use_complement; add_label=true)
 # display(Matrix(adjacency_matrix(G)))
@@ -47,15 +49,17 @@ w = ones(n)
 # 	end
 # end
 
-formulation = "lovasz"
+formulation = "grotschel"
 println(formulation)
-@time sdp_sol = dualSDP(G, w, true, formulation; solver="COSMO", ϵ=0, verbose=false)
+sdp_sol = dualSDP(G, w, true, formulation; solver="COPT", ϵ=0, verbose=false)
 θ = sdp_sol.value
 println("SDP Value: ", θ)
-# Q = Matrix(sdp_sol.Q)
-# val = valfun(Q)
-# x_stable, _ = tabu_valfun(G, w, θ, val)
-# println("Retrieved value: ", w' * x_stable)
+Q = Matrix(sdp_sol.Q)
+val = valfun_ls(Q)
+# @time is_success = tabu_valfun_test(G, w, θ, val; use_theta=false, verbose=false)
+# println(is_success)
+@time x_stable, _ = tabu_valfun(G, w, θ, val)
+println("Retrieved value: ", w' * x_stable)
 
 ######################
 # QSTAB LP interior point value function vs. SDP value function

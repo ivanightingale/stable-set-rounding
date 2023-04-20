@@ -18,7 +18,7 @@ end
 
 
 function load_dimacs_graph(graph_name, use_complement=true)
-    A = mmread("../dat/" * graph_name * ".mtx")
+    A = mmread("../dat/dimacs/" * graph_name * ".mtx")
     if use_complement
         G = complement(SimpleGraph(A))  # the original DIMACS graphs are test cases for max clique problem, so use the complement
     else

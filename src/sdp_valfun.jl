@@ -24,14 +24,7 @@ function solve_grotschel_dual(model, G, w)
     X_val = Symmetric(dual.(X))
     Q_val = Symmetric(value.(Q))
     obj_val = value(t)
-    # lam_val = value.(λ)
-    # Lam_val = value.(Λ)
 
-    # if verbose
-    #     println(max(Lam_val...))
-    #     println(all(Lam_val .>= -1e-3))
-    #     println(Lam_val[Lam_val .< -1e-3])
-    # end
     return (X=X_val, Q=Q_val, value=obj_val)
 end
 
@@ -106,7 +99,6 @@ function solve_lovasz_primal(model, E, w)
     return (X=X_val, Q=Q_val, value=obj_val)
 end
 
-
 # Solve dual SDP
 function dualSDP(G, w, solve_dual=true, formulation="grotschel"; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
@@ -136,21 +128,29 @@ end
 # use value of the PSD matrix in the dual SDPpseudoinverse
 function valfun(Q; ϵ=1e-8)
     n = size(Q,1) - 1
-    i0 = n+1
+    i0 = n + 1
     A = Symmetric(Q[1:n,1:n])
     b = Q[1:n, i0]
-    return S -> b[S]' * pinv(A[S,S],rtol=ϵ) * b[S]  # pinv probably takes a significant portion of time. The pinv of sparse matrix is often dense. Can we do something else?
+    return (S, max_val) -> b[S]' * pinv(A[S,S], rtol=ϵ) * b[S]  # pinv probably takes a significant portion of time. The pinv of sparse matrix is often dense. Can we do something else?
+end
+
+function valfun_ls(Q)
+    n = size(Q,1) - 1
+    i0 = n + 1
+    A = Symmetric(Q[1:n,1:n])
+    b = Q[1:n, i0]
+    return (S, max_val) -> b[S]' * (A[S, S] \ b[S])
 end
 
 # More accurate value function by explicitly solving SDP
 # use value of the PSD matrix in the dual SDP, and solve an SDP on its submatrix
 # to obtain a value function
-function valfun_sdp_explicit(Q; solver="SCS", ϵ=0, feas_ϵ=0)
-    n = size(Q,1)-1
-    i0 = n+1
+function valfun_sdp_explicit(Q; solver="COPT", ϵ=0, feas_ϵ=0)
+    n = size(Q,1) - 1
+    i0 = n + 1
     A = Symmetric(Q[1:n,1:n])
     b = Q[1:n, i0]
-    val = S -> begin
+    val = (S, max_val) -> begin
         model = Model()
         set_sdp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=false)
         @variable(model, t)
@@ -165,24 +165,23 @@ end
 
 # More accurate value function by bisection
 # solve the submatrix SDP by bisection
-function valfun_bisect(Q, θ; psd_ϵ=1e-8, bisect_ϵ=1e-10)
-    upperBound = θ
+function valfun_bisect(Q; ϵ=1e-10, psd_ϵ=1e-8)
+    function bisection(S, condition, t0, t1; ϵ=1e-10)
+        t = (t0 + t1)/2
+        if t1 - t0 < ϵ
+            return t
+        end
+        if condition(t, S)
+            bisection(S, condition, t0, t)
+        else
+            bisection(S, condition, t, t1)
+        end
+    end
     n = size(Q, 1) - 1
     i0 = n + 1
     A = Symmetric(Q[1:n, 1:n])
     b = Q[1:n, i0]
-    isPSD = (t, S) -> eigmin([t b[S]'; b[S] A[S,S]]) > -psd_ϵ
-    return S -> bisection(S, isPSD, 0, upperBound; ϵ=bisect_ϵ)
-end
-
-function bisection(S, condition, t0, t1; ϵ=1e-10)
-    t = (t0 + t1)/2
-    if t1 - t0 < ϵ
-        return t
-    end
-    if condition(t, S)
-        bisection(S, condition, t0, t)
-    else
-        bisection(S, condition, t, t1)
-    end
+    # isPSD = (t, S) -> eigmin([t b[S]'; b[S] A[S,S]]) > -psd_ϵ
+    isPSD = (t, S) -> isposdef([t b[S]'; b[S] A[S,S]])
+    return (S, max_val) -> bisection(S, isPSD, 0, max_val; ϵ=ϵ)
 end

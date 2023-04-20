@@ -3,36 +3,36 @@ include("valfun_utils.jl")
 
 
 # rounding based on value function, a heuristics for general graphs
-function round_valfun(G, w, θ, val)
+function round_valfun(G, w, θ, val; S = collect(1:n), x_stable = falses(n))
     n = nv(G)
-    S = collect(1:n)
-    x_stable = falses(n)
-
+    current_weight = w' * x_stable
     while length(S) > 0
-        idx = argmax(w[j] + val(del(G,S,j)) for j in S)
+        idx = argmax(w[j] + val(del(G,S,j), θ - current_weight) for j in S)
         j = S[idx]
         x_stable[j] = 1
         del!(G, S, j)
-        println("Current weight: ", w' * x_stable)
+        current_weight = w' * x_stable
+        println("Current weight: ", current_weight)
     end
     return x_stable
 end
 
 # Use value function to iteratively discard and pick vertices to form a stable set.
-function tabu_valfun(G, w, θ, val; max_rounds=nv(G), ϵ=1e-4, verbose=true)
+function tabu_valfun(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); max_iter=nv(G), ϵ=1e-4, verbose=true)
+    if max_iter == 0
+        return x_stable, S
+    end
     n = nv(G)
-    S = collect(1:n)
-    x_stable = falses(n)
-    current_weight = 0
-    vertex_value_discard!(w, val, S; ϵ=ϵ, verbose=verbose)
-    for i in 1:max_rounds
+    current_weight = w' * x_stable
+    vertex_value_discard!(w, θ, val, S; ϵ=ϵ, verbose=verbose)
+    for i in 1:max_iter
         fixed_point_discard!(G, w, θ, val, S, current_weight; ϵ, verbose)
         if !isempty(S)
             pick_vertex!(G, S, x_stable)
             current_weight = w' * x_stable
             if verbose
                 println("Current weight: ", current_weight)
-                println("Remaining value: ", val(S))
+                println("Remaining value: ", val(S, θ - current_weight))
             end
         else
             break
@@ -49,10 +49,10 @@ function pick_vertex!(G, S, x_stable; v_to_pick=S[1])
 end
 
 
-function vertex_value_discard!(w, val, S; ϵ=1e-6, verbose=true)
+function vertex_value_discard!(w, θ, val, S; ϵ=1e-6, verbose=true)
     T = copy(S)
     for v in T
-        val_v = val([v])
+        val_v = val([v], θ)
         if w[v] < val_v - ϵ
             setdiff!(S, v)
             if verbose
@@ -65,15 +65,15 @@ function vertex_value_discard!(w, val, S; ϵ=1e-6, verbose=true)
     end
 end
 
-
 function set_value_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbose=true)
+    remaining_weight = θ - current_weight
     T = copy(S)
     for v in T
-        val_v_c = val(del(G, T, v))
-        if w[v] + val_v_c < θ - current_weight - ϵ
+        val_v_c = val(del(G, T, v), remaining_weight)
+        if w[v] + val_v_c < remaining_weight - ϵ
             setdiff!(S, v)
             if verbose
-                println(v, " is discarded. Value of LHS: ", w[v] + val_v_c, "; value of RHS: ", θ - current_weight)
+                println(v, " is discarded. Value of LHS: ", w[v] + val_v_c, "; value of RHS: ", remaining_weight)
             end
         end
     end
@@ -101,17 +101,23 @@ end
 
 # apply tabu_valfun() to pick n_rounds number of vertices, then discard vertices that should be discarded;
 # after that, for each vertex in the remaining set, test whether it is in some maximum stable set
-function tabu_valfun_test(G, w, θ, val; use_theta=false, n_rounds=0, ϵ=1e-6, solver="SCS", solver_ϵ=0, feas_ϵ=0, graph_name=nothing, use_complement=nothing, verbose=false)
+function tabu_valfun_test(G, w, θ, val; use_theta=false, n_start=0, ϵ=1e-6, solver="SCS", solver_ϵ=0, feas_ϵ=0, graph_name=nothing, use_complement=nothing, verbose=false)
     # First, pick a specified number of vertices with tabu_valfun(). If n_rounds=0, this will simply run
     # vertex_value_discard!().
-    x_stable, S = tabu_valfun(G, w, θ, val; max_rounds=n_rounds, ϵ=ϵ, verbose=verbose)
+    if n_start == 0
+        S = collect(1:nv(G))
+        x_stable = falses(nv(G))
+        vertex_value_discard!(w, θ, val, S; ϵ=ϵ, verbose=verbose)
+    else
+        x_stable, S = tabu_valfun(G, w, θ, val; max_iter=n_start, ϵ=ϵ, verbose=verbose)
+    end
     # Discard bad vertices in the resulting set.
     fixed_point_discard!(G, w, θ, val, S, w' * x_stable; ϵ=ϵ, verbose=verbose)
 
     if verbose
         println("Discarding complete. Testing starts...")
     end
-    if isempty(S)
+    if isempty(S) && n_start == 0
         if verbose
             println("****** All vertices discarded, valfun test failed ******")
         end
@@ -173,18 +179,18 @@ end
 
 # verify each vertex in S is in some maximum stable set by picking it and
 # computing the theta value of the remaining subgraph
-function theta_test(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); ϵ=1e-6, solver="SCS", solver_ϵ=0, feas_ϵ=0, verbose=false)
+function theta_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(nv(G)); ϵ=1e-6, solver="SCS", solver_ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     is_success = true
     for first_v in S
         T = copy(S)
-        x = copy(x_stable)
+        x = copy(initial_x_stable)
         pick_vertex!(G, T, x; v_to_pick=first_v)
         current_weight = w' * x
         # compute theta on the subgraph G[T]
         sol = dualSDP(G[T], w[T]; solver=solver, ϵ=solver_ϵ, feas_ϵ=feas_ϵ, verbose=false)
         θ_T  = sol.value
-        val_T = val(T)
+        val_T = val(T, θ - current_weight)
         if abs(val_T - θ_T) > ϵ || abs(θ - θ_T) > w[first_v] + current_weight + ϵ
             is_success = false
             if verbose
