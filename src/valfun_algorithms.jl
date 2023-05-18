@@ -99,10 +99,10 @@ function fixed_point_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbo
     end 
 end
 
-# apply tabu_valfun() to pick n_rounds number of vertices, then discard vertices that should be discarded;
+# apply tabu_valfun() to pick n_start number of vertices, then discard vertices that should be discarded;
 # after that, for each vertex in the remaining set, test whether it is in some maximum stable set
 function tabu_valfun_test(G, w, θ, val; use_theta=false, n_start=0, ϵ=1e-6, solver="SCS", solver_ϵ=0, feas_ϵ=0, graph_name=nothing, use_complement=nothing, verbose=false)
-    # First, pick a specified number of vertices with tabu_valfun(). If n_rounds=0, this will simply run
+    # First, pick a specified number of vertices with tabu_valfun(). If n_start=0, this will simply run
     # vertex_value_discard!().
     if n_start == 0
         S = collect(1:nv(G))
@@ -218,16 +218,26 @@ function test_qstab_valfuns(G, w, θ, λ_ext_points, cliques; use_theta=false, v
 end
 
 
-function tabu_valfun_compare(G, w, θ, val_1, val_2; n_rounds=0, ϵ=1e-6, verbose=false)
-    initial_x_1, S_1 = tabu_valfun(G, w, θ, val_1; max_rounds=n_rounds, ϵ=ϵ, verbose=verbose)
-    initial_x_2, S_2 = tabu_valfun(G, w, θ, val_2; max_rounds=n_rounds, ϵ=ϵ, verbose=verbose)
+function tabu_valfun_compare(G, w, θ, val_1, val_2; n_start=0, ϵ=1e-6, verbose=false)
+    if n_start == 0
+        S_1 = collect(1:nv(G))
+        S_2 = collect(1:nv(G))
+        initial_x_1 = falses(nv(G))
+        initial_x_2 = falses(nv(G))
+        vertex_value_discard!(w, θ, val_1, S_1; ϵ=ϵ, verbose=verbose)
+        vertex_value_discard!(w, θ, val_2, S_2; ϵ=ϵ, verbose=verbose)
+    else
+        initial_x_1, S_1 = tabu_valfun(G, w, θ, val_1; max_iter=n_start, ϵ=ϵ, verbose=verbose)
+        initial_x_2, S_2 = tabu_valfun(G, w, θ, val_2; max_iter=n_start, ϵ=ϵ, verbose=verbose)
+    end
     @assert S_1 == S_2
     S_1_temp = copy(S_1)
     S_2_temp = copy(S_2)
     current_weight = w' * initial_x_1
     fixed_point_discard!(G, w, θ, val_1, S_1, current_weight; ϵ=ϵ, verbose=verbose)
     fixed_point_discard!(G, w, θ, val_2, S_2, current_weight; ϵ=ϵ, verbose=false)
-    if n_rounds == 0
+    # for perfect graphs
+    if n_start == 0
         @assert S_1 == S_1_temp
         @assert S_2 == S_2_temp
     end

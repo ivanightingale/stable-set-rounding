@@ -2,6 +2,8 @@ using GraphPlot, Compose, Colors
 using Cairo, Fontconfig
 using Graphs
 using MatrixMarket, DelimitedFiles
+using Random
+using Combinatorics
 
 
 # chordal, petersen
@@ -67,11 +69,8 @@ function plot_graph(G, graph_name, use_complement=false; S_to_color=[], remove_i
         G_copy = copy(G)
         # indices of vertices of G without isolated vertices
         V_no_isolated = vcat(filter(c -> length(c) > 1, connected_components(G))...)
-        if length(V_no_isolated) > 0
+        if length(V_no_isolated) > 0  # if all vertices are isolated, keep them instead
             G_copy = G[V_no_isolated]
-        else
-            # if all vertices are isolated, keep them instead
-            G_copy = G
         end
     else
         G_copy = G
@@ -83,6 +82,9 @@ function plot_graph(G, graph_name, use_complement=false; S_to_color=[], remove_i
     else
         node_label = nothing
     end
+
+    # FIXME: why sometimes doesn't save when run from REPL?
+
     if length(S_to_color) == 0
         if is_bipartite(G_copy)
             draw( PNG(image_file, 100cm, 100cm), gplot(G_copy, NODESIZE=0.05/sqrt(nv(G_copy)), layout=layout, nodefillc=nodecolor[bipartite_map(G_copy)], nodelabel=node_label) )
@@ -95,4 +97,46 @@ function plot_graph(G, graph_name, use_complement=false; S_to_color=[], remove_i
         color_map = [V[i] in S_to_color for i in 1:nv(G_copy)] .+ 1
         draw( PNG(image_file, 100cm, 100cm), gplot(G_copy, NODESIZE=0.05/sqrt(nv(G_copy)), layout=layout, nodefillc=nodecolor[color_map], nodelabel=node_label) )
     end
+end
+
+# TODO
+# function parse_psm()
+# savegraph
+# end
+
+function generate_generalized_split_graph(n)
+    b = rand([1,-1])
+    E = edges(erdos_renyi(n, 0.5))
+    k = rand(0:n-1)  # first k vertices are put in the central clique C; exclude the case where C includes all n vertices
+    # partition the remaining (n-k) vertices into side cliques S
+    n_partitions = rand(1:n-k)
+    partitions_assignment = rand(1:n_partitions, n-k)
+    partitions = [k .+ findall(partitions_assignment .== i) for i = 1:n_partitions]
+
+    G = SimpleGraph(n)
+    # central clique C
+    for e in combinations(1:k, 2)
+        add_edge!(G, e...)
+    end
+    # side cliques S
+    println(n_partitions)
+    println(partitions)
+    for i in 1:n_partitions
+        for e in combinations(partitions[i], 2)
+            add_edge!(G, e...)
+        end
+    end
+
+    # add edges in E that are between C and S
+    for e in E
+        if src(e) <= k
+            add_edge!(G, e)
+        end
+    end
+
+    if b < 0
+        return complement(G)
+    end
+    plot_graph(G, "test_gsg"; add_label=true)
+    return G
 end

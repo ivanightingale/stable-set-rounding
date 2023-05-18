@@ -61,9 +61,18 @@ function set_lp_optimizer(model; solver="COPT", require_interior_point=false, ϵ
                 set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_DFEAS", feas_ϵ)
                 set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_INFEAS", feas_ϵ)
             end
+        elseif solver == "COPT"
+            set_optimizer(model, optimizer_with_attributes(COPT.Optimizer, "Logging" => Int(verbose), "LogToConsole" => Int(verbose), "LpMethod" => 2))  # TODO: not sure whether COPT uses interior point properly
+            if ϵ > 0
+                set_optimizer_attribute(model, "AbsGap", ϵ)
+                set_optimizer_attribute(model, "RelGap", ϵ)
+            end
+            if feas_ϵ > 0
+                set_optimizer_attribute(model, "FeasTol", feas_ϵ)
+            end
         end
     else
-        if solver == "COPT"
+        if solver == "COPT"  # use simplex method
             set_optimizer(model, optimizer_with_attributes(COPT.Optimizer, "Logging" => Int(verbose), "LogToConsole" => Int(verbose)))
             if ϵ > 0
                 set_optimizer_attribute(model, "AbsGap", ϵ)
@@ -80,7 +89,7 @@ end
 function print_valfun(val, n, max_size=n)
     subsets = powerset(1:n, 0, max_size)
     for s in subsets
-        println(s, " ", val(s))
+        println(s, " ", val(s, n))
     end
 end
 

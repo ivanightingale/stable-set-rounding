@@ -4,14 +4,14 @@ include("qstab_valfun.jl")
 include("valfun_algorithms.jl")
 include("graph_utils.jl")
 
-use_complement = true
-graph_name = "hamming8-2"
-G = load_dimacs_graph(graph_name, use_complement)
-
 # use_complement = true
-# graph_name = "connecting-200-4"
-# family = "chordal"
-# G = load_family_graph(graph_name, family, use_complement)
+# graph_name = "hamming8-2"
+# G = load_dimacs_graph(graph_name, use_complement)
+
+use_complement = false
+graph_name = "diego-11"
+family = "perfect"
+G = load_family_graph(graph_name, family, use_complement)
 
 # use_complement = false
 # G, graph_name = generate_family_graph("hole", 10, use_complement; k=3)
@@ -25,12 +25,12 @@ println(n)
 println(ne(G))
 
 # Weight Vector
-w = ones(n)
+# w = ones(n)
 # w = rand(1:10, n)
 # println(w)
 # w = [2, 1, 1, 1, 1, 1]  # for ivan-6
 # w = [1, 1, 1, 1, 2, 2, 8, 1, 1, 1, 1, 2, 1, 5, 7]  # for connecting-15-1.co
-# w = [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  # for diego-11
+w = [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  # for diego-11
 # w = [1, 1, 1, 1, 2, 2, 1]  # for ivan-7
 # w = [6, 1, 1, 1, 3.5, 3.5, 1, 3.5, 1, 4, 1, 1, 4, 2.5, 1]  # for connecting-15-2.co
 
@@ -49,35 +49,35 @@ w = ones(n)
 # 	end
 # end
 
-formulation = "grotschel"
-println(formulation)
-sdp_sol = dualSDP(G, w, true, formulation; solver="COPT", ϵ=0, verbose=false)
-θ = sdp_sol.value
-println("SDP Value: ", θ)
-Q = Matrix(sdp_sol.Q)
-val = valfun_ls(Q)
-# @time is_success = tabu_valfun_test(G, w, θ, val; use_theta=false, verbose=false)
-# println(is_success)
-@time x_stable, _ = tabu_valfun(G, w, θ, val)
-println("Retrieved value: ", w' * x_stable)
+# formulation = "grotschel"
+# println(formulation)
+# sdp_sol = dualSDP(G, w, true, formulation; solver="COPT", ϵ=0, verbose=false)
+# θ = sdp_sol.value
+# println("SDP Value: ", θ)
+# Q = Matrix(sdp_sol.Q)
+# val = valfun_ls(Q)
+# # @time is_success = tabu_valfun_test(G, w, θ, val; use_theta=false, verbose=false)
+# # println(is_success)
+# @time x_stable, _ = tabu_valfun(G, w, θ, val)
+# println("Retrieved value: ", w' * x_stable)
 
 ######################
 # QSTAB LP interior point value function vs. SDP value function
 ######################
-# sdp_sol = dualSDP(G, w; solver="Mosek", ϵ=1e-12)
-# θ = sdp_sol.value
-# println("SDP Value: ", θ)
-# Q = Matrix(sdp_sol.Q)
-# val_sdp = valfun(Q)
-# # tabu_valfun_test(G, w, sdp_sol.value, val_sdp; use_theta=false, ϵ=1e-8, verbose=true)
+sdp_sol = dualSDP(G, w; solver="COPT", ϵ=1e-9)
+θ = sdp_sol.value
+println("SDP Value: ", θ)
+Q = Matrix(sdp_sol.Q)
+val_sdp = valfun_ls(Q)
+# tabu_valfun_test(G, w, sdp_sol.value, val_sdp; use_theta=false, ϵ=1e-8, verbose=true)
 
-# qstab_sol = qstab_lp_interior_point(G, w; use_all_cliques=true, solver="Mosek", ϵ=1e-12, verbose=false)
-# println("QSTAB LP value: ", qstab_sol.value)
-# λ_interior = qstab_sol.λ
-# val_qstab = valfun_qstab(λ_interior, qstab_sol.cliques)
-# # tabu_valfun_test(G, w, qstab_sol.value, val_qstab; use_theta=false, ϵ=1e-6, verbose=true)
+qstab_sol = qstab_lp_interior_point(G, w; use_all_cliques=true, solver="COPT", ϵ=1e-9, verbose=false)
+println("QSTAB LP value: ", qstab_sol.value)
+λ_interior = qstab_sol.λ
+val_qstab = valfun_qstab(λ_interior, qstab_sol.cliques)
+# tabu_valfun_test(G, w, qstab_sol.value, val_qstab; use_theta=false, ϵ=1e-6, verbose=true)
 
-# tabu_valfun_compare(G, w, θ, val_sdp, val_qstab; ϵ=1e-8, verbose=true)
+tabu_valfun_compare(G, w, θ, val_sdp, val_qstab; ϵ=1e-6, verbose=true)
 
 ######################
 # QSTAB LP extreme points value functions verification
