@@ -56,5 +56,6 @@ w = [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  # for diego-11
 # w = [6, 1, 1, 1, 3.5, 3.5, 1, 3.5, 1, 4, 1, 1, 4, 2.5, 1]  # for connecting-15-2.co
 
 
+run_tabu_valfun_test(G, w, qstab_params, true)
 # run_tabu_valfun_compare(G, w, sdp_params, qstab_params)
-run_test_qstab_valfuns(G, w, qstab_params, sdp_params)
+# run_test_qstab_valfuns(G, w, qstab_params, sdp_params)

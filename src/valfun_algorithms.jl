@@ -137,7 +137,6 @@ function tabu_valfun_test(G, w, θ, val; use_theta=false, n_start=0, ϵ=1e-6, so
     return is_success
 end
 
-
 # Verify each vertex in S is in some maximum stable set by picking it first and
 # then iteratively discarding and picking (as in tabu_valfun).
 # Note that good points could also fail since the picking is naive. To double check, use theta_test().

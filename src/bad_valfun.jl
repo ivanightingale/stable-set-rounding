@@ -2,9 +2,9 @@ using Combinatorics
 using LinearAlgebra
 using JuMP, SCS, MosekTools, COPT
 
-include("graph_utils.jl")
-include("valfun.jl")
-include("valfun_lib.jl")
+include("src/ValFun/valfun.jl")
+using .ValFun
+include("src/graph_utils.jl")
 
 # 1. LP to find weights and val such that all vertices are not discarded, while
 # minimizing val(N)
@@ -27,8 +27,6 @@ function find_bad_val(G)
         for t in powerset(setdiff(N, s), 1)
             if issubset(t, disconnected_vertices)
                 @constraint(model, v[s] + v[t] == v[sort(vcat(s, t))])  # Lemma 2(2)
-            # else
-            #     @constraint(model, v[s] + v[t] >= v[sort(vcat(s, t))])  # subadditivity
             end
         end
     end
