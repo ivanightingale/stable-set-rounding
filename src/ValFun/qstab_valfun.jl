@@ -1,12 +1,14 @@
+export valfun_qstab
+
 using PersistentCohomology
 using Polyhedra
 using Dualization
-include("valfun_utils.jl")
+# include("valfun_utils.jl")
 
 
 # Generate a value function from the optimal dual variables
 function valfun_qstab(λ, cliques)
-    return (S, max_val) -> sum([λ[i] for (i, c) in enumerate(cliques) if !isempty(S ∩ c)])
+    return S -> sum([λ[i] for (i, c) in enumerate(cliques) if !isempty(S ∩ c)])
 end
 
 

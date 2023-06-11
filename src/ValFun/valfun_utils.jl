@@ -3,8 +3,8 @@ using LinearAlgebra, SparseArrays
 using Combinatorics
 using Graphs
 
-function set_sdp_optimizer(model; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
-    if solver == "COSMO"  # for larger graphs
+function set_sdp_optimizer(model; solver=:SCS, ϵ=0, feas_ϵ=0, verbose=false)
+    if solver == :COSMO  # for larger graphs
         set_optimizer(model, optimizer_with_attributes(COSMO.Optimizer, "decompose" => true, "max_iter" => 1000000, "verbose" => verbose))
         if ϵ > 0
             set_optimizer_attribute(model, "eps_abs", ϵ)
@@ -14,7 +14,7 @@ function set_sdp_optimizer(model; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
             set_optimizer_attribute(model, "eps_prim_inf", feas_ϵ)
             set_optimizer_attribute(model, "eps_dual_inf", feas_ϵ)
         end
-    elseif solver == "SCS"
+    elseif solver == :SCS
         set_optimizer(model, optimizer_with_attributes(SCS.Optimizer, "max_iters" => 1000000, "verbose" => verbose))
         if ϵ > 0
             set_optimizer_attribute(model, "eps_abs", ϵ)
@@ -23,18 +23,18 @@ function set_sdp_optimizer(model; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
         if feas_ϵ > 0
             set_optimizer_attribute(model, "eps_infeas", feas_ϵ)
         end
-    elseif solver == "Mosek"
+    elseif solver == :MOSEK
         set_optimizer(model, optimizer_with_attributes(Mosek.Optimizer, "QUIET" => !verbose))
         if ϵ > 0
             set_optimizer_attribute(model, "MSK_DPAR_INTPNT_CO_TOL_REL_GAP", ϵ)
             set_optimizer_attribute(model, "MSK_DPAR_INTPNT_CO_TOL_MU_RED", ϵ)
         end
         if feas_ϵ > 0
-            set_optimizer_attribute(model, "MSK_DPAR_INTPNT_CO_TOL_PFEAS", feas_ϵ)  # TODO: what are the differences?
+            set_optimizer_attribute(model, "MSK_DPAR_INTPNT_CO_TOL_PFEAS", feas_ϵ)
             set_optimizer_attribute(model, "MSK_DPAR_INTPNT_CO_TOL_DFEAS", feas_ϵ)
             set_optimizer_attribute(model, "MSK_DPAR_INTPNT_CO_TOL_INFEAS", feas_ϵ)
         end
-    elseif solver == "COPT"
+    elseif solver == :COPT
         set_optimizer(model, optimizer_with_attributes(COPT.ConeOptimizer, "Logging" => Int(verbose), "LogToConsole" => Int(verbose)))
         if ϵ > 0
             set_optimizer_attribute(model, "AbsGap", ϵ)
@@ -46,9 +46,9 @@ function set_sdp_optimizer(model; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
     end
 end
 
-function set_lp_optimizer(model; solver="COPT", require_interior_point=false, ϵ=0, feas_ϵ=0, verbose=false)
+function set_lp_optimizer(model; solver=:COPT, require_interior_point=false, ϵ=0, feas_ϵ=0, verbose=false)
     if require_interior_point
-        if solver in ["COSMO", "SCS"]
+        if solver in [:COSMO, :SCS]
             set_sdp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
         elseif solver == "Mosek"
             set_optimizer(model, optimizer_with_attributes(Mosek.Optimizer, "QUIET" => !verbose))
@@ -57,12 +57,12 @@ function set_lp_optimizer(model; solver="COPT", require_interior_point=false, ϵ
                 set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_MU_RED", ϵ)
             end
             if feas_ϵ > 0
-                set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_PFEAS", feas_ϵ)  # TODO: what are the differences?
+                set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_PFEAS", feas_ϵ)
                 set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_DFEAS", feas_ϵ)
                 set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_INFEAS", feas_ϵ)
             end
-        elseif solver == "COPT"
-            set_optimizer(model, optimizer_with_attributes(COPT.Optimizer, "Logging" => Int(verbose), "LogToConsole" => Int(verbose), "LpMethod" => 2))  # TODO: not sure whether COPT uses interior point properly
+        elseif solver == :COPT
+            set_optimizer(model, optimizer_with_attributes(COPT.Optimizer, "Logging" => Int(verbose), "LogToConsole" => Int(verbose), "LpMethod" => 2))
             if ϵ > 0
                 set_optimizer_attribute(model, "AbsGap", ϵ)
                 set_optimizer_attribute(model, "RelGap", ϵ)
@@ -72,7 +72,7 @@ function set_lp_optimizer(model; solver="COPT", require_interior_point=false, ϵ
             end
         end
     else
-        if solver == "COPT"  # use simplex method
+        if solver == :COPT  # use simplex method
             set_optimizer(model, optimizer_with_attributes(COPT.Optimizer, "Logging" => Int(verbose), "LogToConsole" => Int(verbose)))
             if ϵ > 0
                 set_optimizer_attribute(model, "AbsGap", ϵ)
@@ -92,10 +92,6 @@ function print_valfun(val, n, max_size=n)
         println(s, " ", val(s, n))
     end
 end
-
-
-del = (G,S,i) -> setdiff(S, vcat(neighbors(G,i), [i]))
-del! = (G,S,i) -> setdiff!(S, vcat(neighbors(G,i), [i]))
 
 
 # convert an optimal LP solution to max stable set to an optimal solution of the SDP relaxation

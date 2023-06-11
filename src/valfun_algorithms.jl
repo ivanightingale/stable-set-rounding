@@ -1,13 +1,15 @@
 include("valfun_utils.jl")
 # include("graph_utils.jl")
 
+del = (G,S,i) -> setdiff(S, vcat(neighbors(G,i), [i]))
+del! = (G,S,i) -> setdiff!(S, vcat(neighbors(G,i), [i]))
 
 # rounding based on value function, a heuristics for general graphs
 function round_valfun(G, w, θ, val; S = collect(1:n), x_stable = falses(n))
     n = nv(G)
     current_weight = w' * x_stable
     while length(S) > 0
-        idx = argmax(w[j] + val(del(G,S,j), θ - current_weight) for j in S)
+        idx = argmax(w[j] + val(del(G,S,j)) for j in S)
         j = S[idx]
         x_stable[j] = 1
         del!(G, S, j)
@@ -32,7 +34,7 @@ function tabu_valfun(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); 
             current_weight = w' * x_stable
             if verbose
                 println("Current weight: ", current_weight)
-                println("Remaining value: ", val(S, θ - current_weight))
+                println("Remaining value: ", val(S))
             end
         else
             break
@@ -52,7 +54,7 @@ end
 function vertex_value_discard!(w, θ, val, S; ϵ=1e-6, verbose=true)
     T = copy(S)
     for v in T
-        val_v = val([v], θ)
+        val_v = val([v])
         if w[v] < val_v - ϵ
             setdiff!(S, v)
             if verbose
@@ -69,7 +71,7 @@ function set_value_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbose
     remaining_weight = θ - current_weight
     T = copy(S)
     for v in T
-        val_v_c = val(del(G, T, v), remaining_weight)
+        val_v_c = val(del(G, T, v))
         if w[v] + val_v_c < remaining_weight - ϵ
             setdiff!(S, v)
             if verbose
@@ -190,7 +192,7 @@ function theta_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(n
         # compute theta on the subgraph G[T]
         sol = dualSDP(G[T], w[T]; solver=solver, ϵ=solver_ϵ, feas_ϵ=feas_ϵ, verbose=false)
         θ_T  = sol.value
-        val_T = val(T, θ - current_weight)
+        val_T = val(T)
         if abs(val_T - θ_T) > ϵ || abs(θ - θ_T) > w[first_v] + current_weight + ϵ
             is_success = false
             if verbose

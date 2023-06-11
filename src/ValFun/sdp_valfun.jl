@@ -1,4 +1,4 @@
-include("valfun_utils.jl")
+# include("valfun_utils.jl")
 
 function solve_grotschel_dual(model, G, w)
     n = nv(G)
@@ -100,20 +100,20 @@ function solve_lovasz_primal(model, E, w)
 end
 
 # Solve dual SDP
-function dualSDP(G, w, solve_dual=true, formulation="grotschel"; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
+function dualSDP(G, w, solve_dual=true, formulation=:grotschel; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     i0 = n + 1
     E = collect(edges(G))
     model = Model()
     set_sdp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
 
-    if formulation == "grotschel"
+    if formulation == :grotschel
         if solve_dual
             sol = solve_grotschel_dual(model, G, w)
         else
             sol = solve_grotschel_primal(model, G, w)
         end
-    elseif formulation == "lovasz"
+    elseif formulation == :lovasz
         if solve_dual
             sol = solve_lovasz_dual(model, G, w)
         else
@@ -131,7 +131,7 @@ function valfun(Q; ϵ=1e-8)
     i0 = n + 1
     A = Symmetric(Q[1:n,1:n])
     b = Q[1:n, i0]
-    return (S, max_val) -> b[S]' * pinv(A[S,S], rtol=ϵ) * b[S]  # pinv probably takes a significant portion of time. The pinv of sparse matrix is often dense. Can we do something else?
+    return S -> b[S]' * pinv(A[S,S], rtol=ϵ) * b[S]
 end
 
 function valfun_ls(Q)
@@ -139,18 +139,18 @@ function valfun_ls(Q)
     i0 = n + 1
     A = Symmetric(Q[1:n,1:n])
     b = Q[1:n, i0]
-    return (S, max_val) -> b[S]' * (A[S, S] \ b[S])
+    return S -> b[S]' * (A[S, S] \ b[S])
 end
 
 # More accurate value function by explicitly solving SDP
 # use value of the PSD matrix in the dual SDP, and solve an SDP on its submatrix
 # to obtain a value function
-function valfun_sdp_explicit(Q; solver="COPT", ϵ=0, feas_ϵ=0)
+function valfun_sdp_explicit(Q; solver=:COPT, ϵ=0, feas_ϵ=0)
     n = size(Q,1) - 1
     i0 = n + 1
     A = Symmetric(Q[1:n,1:n])
     b = Q[1:n, i0]
-    val = (S, max_val) -> begin
+    val = S -> begin
         model = Model()
         set_sdp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=false)
         @variable(model, t)
@@ -161,27 +161,4 @@ function valfun_sdp_explicit(Q; solver="COPT", ϵ=0, feas_ϵ=0)
         value(t)
     end
     return val
-end
-
-# More accurate value function by bisection
-# solve the submatrix SDP by bisection
-function valfun_bisect(Q; ϵ=1e-10, psd_ϵ=1e-8)
-    function bisection(S, condition, t0, t1; ϵ=1e-10)
-        t = (t0 + t1)/2
-        if t1 - t0 < ϵ
-            return t
-        end
-        if condition(t, S)
-            bisection(S, condition, t0, t)
-        else
-            bisection(S, condition, t, t1)
-        end
-    end
-    n = size(Q, 1) - 1
-    i0 = n + 1
-    A = Symmetric(Q[1:n, 1:n])
-    b = Q[1:n, i0]
-    # isPSD = (t, S) -> eigmin([t b[S]'; b[S] A[S,S]]) > -psd_ϵ
-    isPSD = (t, S) -> isposdef([t b[S]'; b[S] A[S,S]])
-    return (S, max_val) -> bisection(S, isPSD, 0, max_val; ϵ=ϵ)
 end
