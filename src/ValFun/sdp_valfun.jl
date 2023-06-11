@@ -1,8 +1,8 @@
-export get_val_fun
+export get_valfun, valfun
 
 # include("valfun_utils.jl")
 
-function get_val_fun(G, w, solve_dual=true, formulation=:grotschel; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
+function get_valfun(G, w, solve_dual=true, formulation=:grotschel; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     i0 = n + 1
     E = collect(edges(G))
@@ -24,7 +24,7 @@ function get_val_fun(G, w, solve_dual=true, formulation=:grotschel; solver=:COPT
     end
     # println(eigmin(Matrix(sol.Q)))
 
-    return (val=val_fun(sol.Q), sol=sol)
+    return (val=valfun(sol.Q), sol=sol)
 end
 
 function solve_grotschel_dual(model, G, w)
@@ -108,7 +108,7 @@ function solve_lovasz_primal(model, E, w)
 end
 
 # Value funciton by psuedoinverse
-function val_fun(Q; use_div=true, ϵ=1e-8)
+function valfun(Q; use_div=true, ϵ=1e-8)
     n = size(Q,1) - 1
     i0 = n + 1
     A = Symmetric(Q[1:n,1:n])
@@ -121,7 +121,7 @@ function val_fun(Q; use_div=true, ϵ=1e-8)
 end
 
 # Value function by explicitly solving SDP on submatrix
-function val_fun_explicit(Q; solver=:COPT, ϵ=0, feas_ϵ=0)
+function valfun_explicit(Q; solver=:COPT, ϵ=0, feas_ϵ=0)
     n = size(Q,1) - 1
     i0 = n + 1
     A = Symmetric(Q[1:n,1:n])

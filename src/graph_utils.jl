@@ -9,7 +9,7 @@ using Combinatorics
 # chordal, petersen
 # graphs generated as adjacency matrix text
 function load_family_graph(graph_name, family, use_complement=false)
-    A = readdlm("../dat/" * family * "/" * graph_name * ".txt")
+    A = readdlm("dat/" * family * "/" * graph_name * ".txt")
     if use_complement
         G = complement(SimpleGraph(A))  # the complement of chordal/perfect graph is also perfect
     else
@@ -20,7 +20,7 @@ end
 
 
 function load_dimacs_graph(graph_name, use_complement=true)
-    A = mmread("../dat/dimacs/" * graph_name * ".mtx")
+    A = mmread("dat/dimacs/" * graph_name * ".mtx")
     if use_complement
         G = complement(SimpleGraph(A))  # the original DIMACS graphs are test cases for max clique problem, so use the complement
     else
@@ -99,9 +99,8 @@ function plot_graph(G, graph_name, use_complement=false; S_to_color=[], remove_i
     end
 end
 
-# TODO
-# function parse_psm()
-# savegraph
+# TODO: function to parse miplib files
+# function parse_mps()
 # end
 
 function generate_generalized_split_graph(n)

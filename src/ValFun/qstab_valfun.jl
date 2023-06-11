@@ -1,16 +1,12 @@
-export get_valfun_qstab
+export get_valfun_qstab, valfun_qstab, qstab_lp_ext
 
 using PersistentCohomology  # for vietorisrips()
 using Polyhedra
 using Dualization
 # include("valfun_utils.jl")
 
-function get_valfun_qstab(G, w, use_interior_point=true, use_all_cliques=true)
-    if use_interior_point
-        qstab_sol = qstab_lp_int_point(G, w, use_all_cliques; solver="COPT", ϵ=1e-9, verbose=false)
-    else
-        qstab_sol = qstab_lp_bfs(G, w, use_all_cliques; ϵ=1e-9, verbose=false)
-    end
+function get_valfun_qstab(G, w, use_all_cliques=true; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
+    qstab_sol = qstab_lp_int(G, w, use_all_cliques; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=false)
     return (val=valfun_qstab(qstab_sol.λ, qstab_sol.cliques), sol=qstab_sol)
 end
 
@@ -69,12 +65,12 @@ end
 
 # Solve max stable set by solving an LP over the clique polytope (QSTAB), constructed by adding
 # constraints for either all cliques or all maximal cliques.
-# Return all optimal dual BFS and the corresponding cliques in the same order.
-function qstab_lp_bfs(G, w, use_all_cliques=true; solver="COPT", ϵ=0, feas_ϵ=0, verbose=false)
+# Return all dual optimal BFS and the corresponding cliques in the same order.
+function qstab_lp_ext(G, w, use_all_cliques=true; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     E = collect(edges(G))
     model = Model()
-    set_lp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
+    set_lp_optimizer(model; solver=solver, use_interior_point=false, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
     @variable(model, x[1:n] >= 0)
 
     cons = Vector{ConstraintRef}(undef, 0)
@@ -102,7 +98,7 @@ function qstab_lp_bfs(G, w, use_all_cliques=true; solver="COPT", ϵ=0, feas_ϵ=0
     return (x=value.(x), value=objective_value(model), λ_ext_points=λ_ext_points, cliques=cliques)
 end
 
-function qstab_lp_int_point(G, w, use_all_cliques=true; solver="Mosek", ϵ=0, feas_ϵ=0, verbose=false)
+function qstab_lp_int(G, w, use_all_cliques=true; solver=:Mosek, ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     E = collect(edges(G))
     model = Model()
@@ -127,10 +123,10 @@ end
 
 # Solve an IP to find a max clique on G given weight w
 # Return the optimal solution
-function max_clique(G, w; solver="COPT", ϵ=0, feas_ϵ=0, verbose=false)
+function max_clique(G, w; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     model = Model()
-    set_lp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
+    set_lp_optimizer(model; solver=solver, use_interior_point=false, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
     @variable(model, z[1:n], Bin)
     @constraint(model, [e in edges(complement(G))], z[src(e)] + z[dst(e)] <= 1)
     @objective(model, Max, w' * z)
