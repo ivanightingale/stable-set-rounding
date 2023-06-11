@@ -140,7 +140,7 @@ end
 # Verify each vertex in S is in some maximum stable set by picking it first and
 # then iteratively discarding and picking (as in tabu_valfun).
 # Note that good points could also fail since the picking is naive. To double check, use theta_test().
-function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(nv(G)); ϵ=1e-4, verbose=false)
+function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(nv(G)); ϵ=1e-6, verbose=false)
     is_success = true
     for first_v in S
         if verbose

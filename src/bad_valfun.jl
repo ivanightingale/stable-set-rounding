@@ -1,20 +1,19 @@
 using Combinatorics
-using LinearAlgebra
-using JuMP, SCS, MosekTools, COPT
+using JuMP
 
-include("src/ValFun/valfun.jl")
 using .ValFun
-include("src/graph_utils.jl")
+include("valfun_algorithms.jl")
 
-# 1. LP to find weights and val such that all vertices are not discarded, while
-# minimizing val(N)
-# 2. find θ value using the weights. θ should match val(N)
-function find_bad_val(G)
+# Solve an LP to find weights and a value function such that the value function satisfies some
+# properties we know about the SDP and QSTAB LP value functions, and all vertices are not discarded,
+# but not all vertices are in maximum stable sets..
+function find_bad_valfun(G; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     N = collect(1:n)
 
-    model = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => false))
-    subsets = collect(powerset(N))
+    model = Model()
+    set_lp_optimizer(model, false; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
+    subsets = collect(powerset(N, 1))
     @variable(model, v[subsets] >= 0)
     @variable(model, w[1:n] >= 1)
     for s in powerset(N, 1)
@@ -32,36 +31,31 @@ function find_bad_val(G)
     end
 
     for i in N
-        @constraint(model, v[N] - v[del_lp(G, N, i)] == w[i])  # discard rule
+        @constraint(model, v[N] - v[del(G, N, i)] == w[i])  # discard rule
         @constraint(model, v[[i]] >= w[i])  # Lemma 2(3)
     end
-    @constraint(model, v[Int64[]] == 0)
+    # @constraint(model, v[Int64[]] == 0)
     @objective(model, Min, v[N])
     println("Optimizing...")
     optimize!(model)
-    println(solution_summary(model))
     if termination_status(model) != MOI.OPTIMAL
         return nothing, nothing
     end
 
     bad_w = value.(w)
-    bad_val = (S) -> value(v[S])
+    bad_val = S -> isempty(S) ? 0 : value(v[S])
     println(bad_w)
 
-    sdp_sol = dualSDP(G, bad_w; solver="Mosek", ϵ=1e-9)
-    println("The theta value is ", sdp_sol.value, ", and val(N) is ", value(v[N]))
-
-    return bad_w, bad_val, sdp_sol
+    return (w=bad_w, val=bad_val, obj=objective_value(model))
 end
 
-
-function del_lp(G,S,i)
-    s_del = setdiff(S, vcat(neighbors(G,i), [i]))
-    if s_del == []
-        s_del = Int64[]
-    end
-    return s_del
-end
+# function del_lp(G,S,i)
+#     s_del = setdiff(S, vcat(neighbors(G,i), [i]))
+#     if s_del == []
+#         s_del = Int64[]
+#     end
+#     return s_del
+# end
 
 function del_set(G, S, vertices)
     s_del = setdiff(S, union([neighbors(G,i) for i in vertices]..., vertices))
@@ -70,27 +64,3 @@ function del_set(G, S, vertices)
     end
     return s_del
 end
-
-#-----------------------------------------
-use_complement = false
-graph_name = "ivan-6-bad"
-family = "chordal"
-G = load_family_graph(graph_name, family, use_complement)
-# G, graph_name = generate_family_graph("hole", 6, use_complement)
-
-# plot_graph(G, graph_name, use_complement; add_label=true)
-n = nv(G)
-println(graph_name, " ", use_complement)
-println(n)
-println(ne(G))
-
-bad_w, bad_val, sdp_sol = find_bad_val(G)
-# print_valfun(bad_val, n)
-θ = sdp_sol.value
-val = valfun(Matrix(sdp_sol.Q))
-
-# check if bad_val is good or bad (whether each vertex is in some max stable set)
-# println("stable set test")
-# stable_set_test(G, bad_w, θ, bad_val)
-println("theta test")
-theta_test(G, bad_w, θ, bad_val; solver="SCS")

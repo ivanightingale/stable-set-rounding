@@ -1,5 +1,6 @@
 using .ValFun
 include("valfun_algorithms.jl")
+include("bad_valfun.jl")
 
 function get_params_valfun(G, w, params, use_qstab=false)
     if use_qstab
@@ -66,7 +67,10 @@ function run_test_qstab_valfuns(G, w, qstab_params, sdp_params)
     failure_count = 0
     for (i, λ) in enumerate(qstab_sol.λ_ext_points)
         val_qstab = valfun_qstab(λ, qstab_sol.cliques)
-        val_qstab_sdp = valfun(qstab_to_sdp(G, w, λ, qstab_sol.cliques); use_div=sdp_params[:use_div], pinv_rtol=sdp_params[:pinv_rtol])
+        val_qstab_sdp = valfun(qstab_to_sdp(G, w, λ, qstab_sol.cliques);
+            use_div=sdp_params[:use_div],
+            pinv_rtol=sdp_params[:pinv_rtol]
+        )
         if !tabu_valfun_test(G, w, obj, val_qstab;
             ϵ=qstab_params[:valfun_ϵ],
             solver=qstab_params[:solver],
@@ -99,5 +103,26 @@ function run_test_qstab_valfuns(G, w, qstab_params, sdp_params)
         solver_ϵ=sdp_params[:solver_ϵ],
         feas_ϵ=sdp_params[:solver_feas_ϵ],
         verbose=sdp_params[:verbose]
+    )
+end
+
+function run_find_bad_valfun(G, params)
+    bad_val_out = find_bad_valfun(G; solver=params[:solver], ϵ=params[:solver_ϵ], feas_ϵ=params[:solver_feas_ϵ])
+    bad_w = bad_val_out.w
+    obj = bad_val_out.obj
+    bad_val = bad_val_out.val
+    
+    # Check if bad_val is good or bad (whether each vertex is in some max stable set)
+    stable_set_test(G, bad_w, obj, bad_val;
+        ϵ=params[:valfun_ϵ],
+        verbose=params[:verbose]
+    )
+
+    # Get the SDP value function on G with the bad weights
+    sdp_out = get_params_valfun(G, bad_w, params, false)
+    println("The theta value is ", sdp_out.sol.value, ", and bad_val(N) is ", bad_val(collect(1:nv(G))))
+    stable_set_test(G, bad_w, obj, sdp_out.val;
+        ϵ=params[:valfun_ϵ],
+        verbose=params[:verbose]
     )
 end

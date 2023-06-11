@@ -30,7 +30,7 @@ qstab_params = Dict(
 # G = load_dimacs_graph(graph_name, use_complement)
 
 use_complement = false
-graph_name = "diego-11"
+graph_name = "ivan-6"
 family = "perfect"
 G = load_family_graph(graph_name, family, use_complement)
 
@@ -49,9 +49,9 @@ println(ne(G))
 # w = ones(n)
 # w = rand(1:10, n)
 # println(w)
-# w = [2, 1, 1, 1, 1, 1]  # for ivan-6
+w = [2, 1, 1, 1, 1, 1]  # for ivan-6
 # w = [1, 1, 1, 1, 2, 2, 8, 1, 1, 1, 1, 2, 1, 5, 7]  # for connecting-15-1.co
-w = [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  # for diego-11
+# w = [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  # for diego-11
 # w = [1, 1, 1, 1, 2, 2, 1]  # for ivan-7
 # w = [6, 1, 1, 1, 3.5, 3.5, 1, 3.5, 1, 4, 1, 1, 4, 2.5, 1]  # for connecting-15-2.co
 
@@ -59,3 +59,4 @@ w = [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  # for diego-11
 run_tabu_valfun_test(G, w, qstab_params, true)
 # run_tabu_valfun_compare(G, w, sdp_params, qstab_params)
 # run_test_qstab_valfuns(G, w, qstab_params, sdp_params)
+# run_find_bad_valfun(G, sdp_params)

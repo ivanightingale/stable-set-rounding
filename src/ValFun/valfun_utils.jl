@@ -1,4 +1,4 @@
-export print_valfun, qstab_to_sdp
+export print_valfun, qstab_to_sdp, set_sdp_optimizer, set_lp_optimizer
 
 using JuMP, MosekTools, SCS, COSMO, COPT
 using LinearAlgebra, SparseArrays
