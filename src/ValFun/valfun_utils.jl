@@ -48,7 +48,7 @@ function set_sdp_optimizer(model; solver=:SCS, ϵ=0, feas_ϵ=0, verbose=false)
     end
 end
 
-function set_lp_optimizer(model; solver=:COPT, use_interior_point=false, ϵ=0, feas_ϵ=0, verbose=false)
+function set_lp_optimizer(model, use_interior_point=true; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
     if use_interior_point
         if solver in [:COSMO, :SCS]
             set_sdp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)

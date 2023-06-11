@@ -19,7 +19,7 @@ function round_valfun(G, w, θ, val; S = collect(1:n), x_stable = falses(n))
 end
 
 # Use value function to iteratively discard and pick vertices to form a stable set.
-function tabu_valfun(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); max_iter=nv(G), ϵ=1e-4, verbose=true)
+function tabu_valfun(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); max_iter=nv(G), ϵ=1e-6, verbose=true)
     if max_iter == 0
         return x_stable, S
     end
@@ -98,11 +98,11 @@ function fixed_point_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbo
     end 
 end
 
-# Apply tabu_valfun() to pick n_start number of vertices, then discard vertices that should be discarded;
-# after that, for each vertex in the remaining set, test whether it is in some maximum stable set
+# Apply tabu_valfun() to pick n_start number of vertices. Next, discard vertices that should be
+# discarded. Then, for each vertex in the remaining set, test whether it is in some maximum stable set
 function tabu_valfun_test(G, w, θ, val; use_theta=false, n_start=0, ϵ=1e-6, solver="SCS", solver_ϵ=0, feas_ϵ=0, graph_name=nothing, use_complement=nothing, verbose=false)
     # First, pick a specified number of vertices with tabu_valfun(). If n_start=0, this will simply run
-    # vertex_value_discard!().
+    # vertex_value_discard!()
     if n_start == 0
         S = collect(1:nv(G))
         x_stable = falses(nv(G))
@@ -202,45 +202,36 @@ function theta_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(n
     return is_success
 end
 
-# Run a tabu_valfun_test for each dual solutions in λ_ext_points, and count the number of points that failed.
-function test_qstab_valfuns(G, w, θ, λ_ext_points, cliques; use_theta=false, verbose=false)
-    failure_count = 0
-    for (i, λ) in enumerate(λ_ext_points)
-        val_qstab = valfun_qstab(λ, cliques)
-        val_qstab_sdp = valfun(qstab_to_sdp(G, w, λ, cliques))
-        if !tabu_valfun_test(G, w, θ, val_qstab; use_theta=use_theta, ϵ=1e-6, solver="Mosek", solver_ϵ=0, verbose=verbose) || !tabu_valfun_test(G, w, θ, val_qstab_sdp; use_theta=use_theta, ϵ=1e-6, solver="Mosek", solver_ϵ=0, verbose=verbose)
-            failure_count += 1
-        end
-    end
-    return failure_count
-end
-
+# Compare operations performed by tabu_valfun_test() by two value functions on the same graph, and check
+# whether they are the same.
 function tabu_valfun_compare(G, w, θ, val_1, val_2; n_start=0, ϵ=1e-6, verbose=false)
+    # First, pick n_start vertices
     if n_start == 0
         S_1 = collect(1:nv(G))
         S_2 = collect(1:nv(G))
         initial_x_1 = falses(nv(G))
         initial_x_2 = falses(nv(G))
-        vertex_value_discard!(w, θ, val_1, S_1; ϵ=ϵ, verbose=verbose)
-        vertex_value_discard!(w, θ, val_2, S_2; ϵ=ϵ, verbose=verbose)
+        vertex_value_discard!(w, θ, val_1, S_1; ϵ, verbose)
+        vertex_value_discard!(w, θ, val_2, S_2; ϵ, verbose)
     else
-        initial_x_1, S_1 = tabu_valfun(G, w, θ, val_1; max_iter=n_start, ϵ=ϵ, verbose=verbose)
-        initial_x_2, S_2 = tabu_valfun(G, w, θ, val_2; max_iter=n_start, ϵ=ϵ, verbose=verbose)
+        initial_x_1, S_1 = tabu_valfun(G, w, θ, val_1; max_iter=n_start, ϵ, verbose)
+        initial_x_2, S_2 = tabu_valfun(G, w, θ, val_2; max_iter=n_start, ϵ, verbose)
     end
     @assert S_1 == S_2
     S_1_temp = copy(S_1)
     S_2_temp = copy(S_2)
     current_weight = w' * initial_x_1
-    fixed_point_discard!(G, w, θ, val_1, S_1, current_weight; ϵ=ϵ, verbose=verbose)
-    fixed_point_discard!(G, w, θ, val_2, S_2, current_weight; ϵ=ϵ, verbose=false)
-    # for perfect graphs
+    fixed_point_discard!(G, w, θ, val_1, S_1, current_weight; ϵ, verbose)
+    fixed_point_discard!(G, w, θ, val_2, S_2, current_weight; ϵ, verbose)
+    # For perfect graphs, by our hypothesis, the above fixed_point_discard!() should have no effect.
     if n_start == 0
         @assert S_1 == S_1_temp
         @assert S_2 == S_2_temp
     end
     @assert S_1 == S_2
+    # Execute tabu_valfun_test() simultaneously
     if verbose
-        println("Discarding complete. Testing starts...")
+        println("Discarding complete. Comparison starts...")
     end
     for first_v in S_1
         if verbose

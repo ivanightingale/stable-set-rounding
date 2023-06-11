@@ -1,61 +1,101 @@
+using .ValFun
 
-######################
-# SDP formulations performance comparison
-######################
-# dualSDP(G, w, true; solver="Mosek")  # warm-up
-# for solver in ["Mosek", "SCS", "COSMO", "COPT"]
-# 	for solve_dual in [true, false]
-# 		println(solver)
-# 		println(solve_dual)
-# 		@time sdp_sol = dualSDP(G, w, solve_dual; solver=solver, ϵ=1e-7)
-# 		θ = sdp_sol.value
-# 		println("SDP Value: ", θ)
-# 		# display(sdp_sol.Q)
-# 	end
-# end
+function get_params_valfun(G, w, params, use_qstab=false)
+    if use_qstab
+        return get_valfun_qstab(G, w, params[:use_all_cliques];
+            solver=params[:solver],
+            ϵ=params[:solver_ϵ],
+            feas_ϵ=params[:solver_feas_ϵ]
+        )
+    else
+        return get_valfun(G, w, params[:solve_dual], params[:formulation];
+            solver=params[:solver],
+            ϵ=params[:solver_ϵ],
+            feas_ϵ=params[:solver_feas_ϵ],
+            use_div=params[:use_div],
+            pinv_rtol=params[:pinv_rtol]
+        )
+    end
+end
 
-# formulation = :grotschel
-# println(formulation)
-# sdp_out = get_valfun(G, w; solver=:COPT, ϵ=1e-9)
-# sdp_sol = sdp_out.sol
-# θ = sdp_sol.value
-# println("SDP Value: ", θ)
-# val = sdp_out.val
-# # @time is_success = tabu_valfun_test(G, w, θ, val; use_theta=false, verbose=false)
-# # println(is_success)
-# @time x_stable, _ = tabu_valfun(G, w, θ, val)
-# println("Retrieved value: ", w' * x_stable)
+function run_tabu_valfun(G, w, params, use_qstab=false)
+    out = get_params_valfun(G, w, params, use_qstab)
+    obj = out.sol.value
+    println("Optimal value: ", obj)
+    val = out.val
+    @time x_stable, _ = tabu_valfun(G, w, obj, val; ϵ=params[:valfun_ϵ], verbose=params[:verbose])
+    println("Retrieved value: ", w' * x_stable)
+end
 
-######################
-# QSTAB LP interior point value function vs. SDP value function
-######################
-# sdp_out = get_valfun(G, w; solver=:COPT, ϵ=1e-9)
-# sdp_sol = sdp_out.sol
-# θ = sdp_sol.value
-# println("SDP Value: ", θ)
-# val_sdp = sdp_out.val
-# # tabu_valfun_test(G, w, sdp_sol.value, val_sdp; use_theta=false, ϵ=1e-8, verbose=true)
+function run_tabu_valfun_test(G, w, params, use_qstab=false)
+    out = get_params_valfun(G, w, params, use_qstab)
+    obj = out.sol.value
+    println("Optimal value: ", obj)
+    val = out.val
+    @time tabu_valfun_test(G, w, obj, val; ϵ=params[:valfun_ϵ], verbose=params[:verbose])
+end
 
-# qstab_out = get_valfun_qstab(G, w, true, true)
-# qstab_sol = qstab_out.sol
-# println("QSTAB LP value: ", qstab_sol.value)
-# val_qstab = qstab_out.val
-# # tabu_valfun_test(G, w, qstab_sol.value, val_qstab; use_theta=false, ϵ=1e-6, verbose=true)
+# Check whether the QSTAB LP interior point value function and the SDP value function result in the
+# same operations when used by tabu_valfun_test()
+function run_tabu_valfun_compare(G, w, sdp_params, qstab_params)
+    sdp_out = get_params_valfun(G, w, sdp_params, false)
+    θ = sdp_out.sol.value
+    println("SDP value: ", θ)
+    val_sdp = sdp_out.val
 
-# tabu_valfun_compare(G, w, θ, val_sdp, val_qstab; ϵ=1e-6, verbose=true)
+    qstab_out = get_params_valfun(G, w, qstab_params, true)
+    qstab_sol = qstab_out.sol
+    println("QSTAB LP value: ", qstab_sol.value)
+    val_qstab = qstab_out.val
 
-######################
+    tabu_valfun_compare(G, w, θ, val_sdp, val_qstab; ϵ=sdp_params[:valfun_ϵ], verbose=sdp_params[:verbose])
+end
+
 # QSTAB LP extreme points value functions verification
-######################
-qstab_sol = qstab_lp_ext(G, w, false; ϵ=1e-9, verbose=false)
-θ = qstab_sol.value
-println("QSTAB LP value: ", θ)
-failure_count = test_qstab_valfuns(G, w, θ, qstab_sol.λ_ext_points, qstab_sol.cliques; use_theta=false, verbose=false)
-println("Number of failed extreme points: ", failure_count, "; total extreme points: ", length(qstab_sol.λ_ext_points))
-λ_interior = sum(qstab_sol.λ_ext_points) / length(qstab_sol.λ_ext_points)
-val = valfun_qstab(λ_interior, qstab_sol.cliques)
-val_qstab_sdp = valfun(qstab_to_sdp(G, w, λ_interior, qstab_sol.cliques))
-println("Testing the interior point...")
-println(λ_interior)
-tabu_valfun_test(G, w, θ, val; use_theta=false, ϵ=1e-6, solver="Mosek", solver_ϵ=0, verbose=true)
-println(tabu_valfun_test(G, w, θ, val_qstab_sdp; use_theta=false, ϵ=1e-6, solver="Mosek", solver_ϵ=1e-9, verbose=false))
+function run_test_qstab_valfuns(G, w, qstab_params, sdp_params)
+    qstab_sol = qstab_lp_ext(G, w, qstab_params[:use_all_cliques];
+        solver=qstab_params[:solver],
+        ϵ=qstab_params[:solver_ϵ],
+        feas_ϵ=qstab_params[:solver_feas_ϵ]
+    )
+    obj = qstab_sol.value
+    println("QSTAB LP value: ", obj)
+    # Run a tabu_valfun_test for each dual solutions in λ_ext_points, and count the number of failures
+    failure_count = 0
+    for (i, λ) in enumerate(qstab_sol.λ_ext_points)
+        val_qstab = valfun_qstab(λ, qstab_sol.cliques)
+        val_qstab_sdp = valfun(qstab_to_sdp(G, w, λ, qstab_sol.cliques); use_div=sdp_params[:use_div], pinv_rtol=sdp_params[:pinv_rtol])
+        if !tabu_valfun_test(G, w, obj, val_qstab;
+            ϵ=qstab_params[:valfun_ϵ],
+            solver=qstab_params[:solver],
+            solver_ϵ=qstab_params[:solver_ϵ],
+            feas_ϵ=qstab_params[:solver_feas_ϵ]) || 
+            !tabu_valfun_test(G, w, obj, val_qstab_sdp;
+            ϵ=sdp_params[:valfun_ϵ],
+            solver=sdp_params[:solver],
+            solver_ϵ=sdp_params[:solver_ϵ],
+            feas_ϵ=sdp_params[:solver_feas_ϵ])
+            
+            failure_count += 1
+        end
+    end
+    println("Number of failed extreme points: ", failure_count, "; total extreme points: ", length(qstab_sol.λ_ext_points))
+    λ_interior = sum(qstab_sol.λ_ext_points) / length(qstab_sol.λ_ext_points)
+    val_qstab = valfun_qstab(λ_interior, qstab_sol.cliques)
+    val_qstab_sdp = valfun(qstab_to_sdp(G, w, λ_interior, qstab_sol.cliques); use_div=sdp_params[:use_div], pinv_rtol=sdp_params[:pinv_rtol])
+    println("Testing the interior point...")
+    tabu_valfun_test(G, w, obj, val_qstab;
+        ϵ=qstab_params[:valfun_ϵ],
+        solver=qstab_params[:solver],
+        solver_ϵ=qstab_params[:solver_ϵ],
+        feas_ϵ=qstab_params[:solver_feas_ϵ],
+        verbose=qstab_params[:verbose]
+    )
+    tabu_valfun_test(G, w, obj, val_qstab_sdp;
+        ϵ=sdp_params[:valfun_ϵ],
+        solver=sdp_params[:solver],
+        solver_ϵ=sdp_params[:solver_ϵ],
+        feas_ϵ=sdp_params[:solver_feas_ϵ],
+        verbose=sdp_params[:verbose]
+    )
+end

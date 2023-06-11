@@ -1,8 +1,6 @@
 export get_valfun, valfun
 
-# include("valfun_utils.jl")
-
-function get_valfun(G, w, solve_dual=true, formulation=:grotschel; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
+function get_valfun(G, w, solve_dual=true, formulation=:grotschel; solver=:COPT, ϵ=0, feas_ϵ=0, use_div=true, pinv_rtol=1e-6, verbose=false)
     n = nv(G)
     i0 = n + 1
     E = collect(edges(G))
@@ -24,7 +22,7 @@ function get_valfun(G, w, solve_dual=true, formulation=:grotschel; solver=:COPT,
     end
     # println(eigmin(Matrix(sol.Q)))
 
-    return (val=valfun(sol.Q), sol=sol)
+    return (val=valfun(sol.Q; use_div, pinv_rtol), sol=sol)
 end
 
 function solve_grotschel_dual(model, G, w)
@@ -108,7 +106,7 @@ function solve_lovasz_primal(model, E, w)
 end
 
 # Value funciton by psuedoinverse
-function valfun(Q; use_div=true, ϵ=1e-8)
+function valfun(Q; use_div=true, pinv_rtol=1e-9)
     n = size(Q,1) - 1
     i0 = n + 1
     A = Symmetric(Q[1:n,1:n])
@@ -116,7 +114,7 @@ function valfun(Q; use_div=true, ϵ=1e-8)
     if use_div
         return S -> b[S]' * (A[S, S] \ b[S])
     else
-        return S -> b[S]' * pinv(A[S,S], rtol=ϵ) * b[S]
+        return S -> b[S]' * pinv(A[S,S], rtol=pinv_rtol) * b[S]
     end
 end
 

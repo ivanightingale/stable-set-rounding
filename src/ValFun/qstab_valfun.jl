@@ -3,7 +3,6 @@ export get_valfun_qstab, valfun_qstab, qstab_lp_ext
 using PersistentCohomology  # for vietorisrips()
 using Polyhedra
 using Dualization
-# include("valfun_utils.jl")
 
 function get_valfun_qstab(G, w, use_all_cliques=true; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
     qstab_sol = qstab_lp_int(G, w, use_all_cliques; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=false)
@@ -70,7 +69,7 @@ function qstab_lp_ext(G, w, use_all_cliques=true; solver=:COPT, ϵ=0, feas_ϵ=0,
     n = nv(G)
     E = collect(edges(G))
     model = Model()
-    set_lp_optimizer(model; solver=solver, use_interior_point=false, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
+    set_lp_optimizer(model, false; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
     @variable(model, x[1:n] >= 0)
 
     cons = Vector{ConstraintRef}(undef, 0)
@@ -126,7 +125,7 @@ end
 function max_clique(G, w; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     model = Model()
-    set_lp_optimizer(model; solver=solver, use_interior_point=false, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
+    set_lp_optimizer(model, false; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
     @variable(model, z[1:n], Bin)
     @constraint(model, [e in edges(complement(G))], z[src(e)] + z[dst(e)] <= 1)
     @objective(model, Max, w' * z)
@@ -155,7 +154,7 @@ end
 function dual_interior_point(model; solver=:Mosek, ϵ=0, feas_ϵ=0, verbose=false)
     println("Dualizing...")
     dual_model = dualize(model)
-    set_lp_optimizer(dual_model; solver=solver, use_interior_point=true, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
+    set_lp_optimizer(dual_model, true; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
     optimize!(dual_model)
     return (λ=-value.(all_variables(dual_model)), value=objective_value(dual_model))
 end
@@ -177,7 +176,6 @@ function is_clique(G, S)
     end
     return true
 end
-
 
 # Solve max stable set by starting with the fractional stable set polytope (edge
 # polytope) and adding clique constraint cutting planes by solving auxiliary problems.
