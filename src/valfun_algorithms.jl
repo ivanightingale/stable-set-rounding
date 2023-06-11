@@ -1,10 +1,9 @@
-include("valfun_utils.jl")
-# include("graph_utils.jl")
+using .ValFun
 
 del = (G,S,i) -> setdiff(S, vcat(neighbors(G,i), [i]))
 del! = (G,S,i) -> setdiff!(S, vcat(neighbors(G,i), [i]))
 
-# rounding based on value function, a heuristics for general graphs
+# Heuristic for non-perfect graphs, the original rounding algorithm
 function round_valfun(G, w, θ, val; S = collect(1:n), x_stable = falses(n))
     n = nv(G)
     current_weight = w' * x_stable
@@ -43,13 +42,11 @@ function tabu_valfun(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); 
     return x_stable, S
 end
 
-
-# pick a vertex in S (default to the first vertex in S), then update the boolean vector x_stable and S
+# Pick a vertex in S (default to the first vertex in S), then update the boolean vector x_stable and S
 function pick_vertex!(G, S, x_stable; v_to_pick=S[1])
     x_stable[v_to_pick] = true
     del!(G, S, v_to_pick)
 end
-
 
 function vertex_value_discard!(w, θ, val, S; ϵ=1e-6, verbose=true)
     T = copy(S)
@@ -81,7 +78,7 @@ function set_value_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbose
     end
 end
 
-# repeatedly apply set_value_discard until no more vertices can be discarded
+# Repeatedly apply set_value_discard until no more vertices can be discarded
 function fixed_point_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbose=true)
     original_size = length(S)
     prev_size = Inf
@@ -101,7 +98,7 @@ function fixed_point_discard!(G, w, θ, val, S, current_weight=0; ϵ=1e-4, verbo
     end 
 end
 
-# apply tabu_valfun() to pick n_start number of vertices, then discard vertices that should be discarded;
+# Apply tabu_valfun() to pick n_start number of vertices, then discard vertices that should be discarded;
 # after that, for each vertex in the remaining set, test whether it is in some maximum stable set
 function tabu_valfun_test(G, w, θ, val; use_theta=false, n_start=0, ϵ=1e-6, solver="SCS", solver_ϵ=0, feas_ϵ=0, graph_name=nothing, use_complement=nothing, verbose=false)
     # First, pick a specified number of vertices with tabu_valfun(). If n_start=0, this will simply run
@@ -179,7 +176,7 @@ function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=fal
     return is_success
 end
 
-# verify each vertex in S is in some maximum stable set by picking it and
+# Verify each vertex in S is in some maximum stable set by picking it and
 # computing the theta value of the remaining subgraph
 function theta_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(nv(G)); ϵ=1e-6, solver="SCS", solver_ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
@@ -205,7 +202,6 @@ function theta_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(n
     return is_success
 end
 
-
 # Run a tabu_valfun_test for each dual solutions in λ_ext_points, and count the number of points that failed.
 function test_qstab_valfuns(G, w, θ, λ_ext_points, cliques; use_theta=false, verbose=false)
     failure_count = 0
@@ -218,7 +214,6 @@ function test_qstab_valfuns(G, w, θ, λ_ext_points, cliques; use_theta=false, v
     end
     return failure_count
 end
-
 
 function tabu_valfun_compare(G, w, θ, val_1, val_2; n_start=0, ϵ=1e-6, verbose=false)
     if n_start == 0

@@ -1,17 +1,25 @@
-export valfun_qstab
+export get_valfun_qstab
 
-using PersistentCohomology
+using PersistentCohomology  # for vietorisrips()
 using Polyhedra
 using Dualization
 # include("valfun_utils.jl")
 
+function get_valfun_qstab(G, w, use_interior_point=true, use_all_cliques=true)
+    if use_interior_point
+        qstab_sol = qstab_lp_int_point(G, w, use_all_cliques; solver="COPT", ϵ=1e-9, verbose=false)
+    else
+        qstab_sol = qstab_lp_bfs(G, w, use_all_cliques; ϵ=1e-9, verbose=false)
+    end
+    return (val=valfun_qstab(qstab_sol.λ, qstab_sol.cliques), sol=qstab_sol)
+end
 
 # Generate a value function from the optimal dual variables
 function valfun_qstab(λ, cliques)
     return S -> sum([λ[i] for (i, c) in enumerate(cliques) if !isempty(S ∩ c)])
 end
 
-
+# Get the list of all maximal cliques (cliques that are not contained in larger cliques) of G
 function maximal_cliques(G)
     n = nv(G)
     # find unweighted max stable set number
@@ -40,7 +48,7 @@ function maximal_cliques(G)
     return cliques
 end
 
-
+# Get the list of all cliques of G
 function all_cliques(G)
     n = nv(G)
     # find unweighted max stable set number
@@ -48,7 +56,7 @@ function all_cliques(G)
     cliques = Vector{Vector{Int64}}(undef, 0)
     # obtain a tuple where the i-th entry contains all cliques of G with size i
     clique_lists_by_size = vietorisrips(adjacency_matrix(G), α)
-    # add constraints for all cliques
+
     for k in 1:α
         k_cliques = keys(clique_lists_by_size[k])
         for c in k_cliques
@@ -59,11 +67,10 @@ function all_cliques(G)
     return cliques
 end
 
-
-# Solve max stable set by solving an LP over the clique polytope (QSTAB), constructed by
-# finding all cliques or the maximal cliques only and adding corresponding constraints.
+# Solve max stable set by solving an LP over the clique polytope (QSTAB), constructed by adding
+# constraints for either all cliques or all maximal cliques.
 # Return all optimal dual BFS and the corresponding cliques in the same order.
-function qstab_lp(G, w; use_all_cliques=true, solver="COPT", ϵ=0, feas_ϵ=0, verbose=false)
+function qstab_lp_bfs(G, w, use_all_cliques=true; solver="COPT", ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     E = collect(edges(G))
     model = Model()
@@ -76,7 +83,6 @@ function qstab_lp(G, w; use_all_cliques=true, solver="COPT", ϵ=0, feas_ϵ=0, ve
     else
         cliques = maximal_cliques(G)
     end
-
     # add corresponding constraints
     for c in cliques
         push!(cons, @constraint(model, sum(x[c]) <= 1))
@@ -96,8 +102,7 @@ function qstab_lp(G, w; use_all_cliques=true, solver="COPT", ϵ=0, feas_ϵ=0, ve
     return (x=value.(x), value=objective_value(model), λ_ext_points=λ_ext_points, cliques=cliques)
 end
 
-
-function qstab_lp_interior_point(G, w; use_all_cliques=true, solver="Mosek", ϵ=0, feas_ϵ=0, verbose=false)
+function qstab_lp_int_point(G, w, use_all_cliques=true; solver="Mosek", ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     E = collect(edges(G))
     model = Model()
@@ -120,7 +125,6 @@ function qstab_lp_interior_point(G, w; use_all_cliques=true, solver="Mosek", ϵ=
     return (value=dual_sol.value, λ=dual_sol.λ, cliques=cliques)
 end
 
-
 # Solve an IP to find a max clique on G given weight w
 # Return the optimal solution
 function max_clique(G, w; solver="COPT", ϵ=0, feas_ϵ=0, verbose=false)
@@ -134,8 +138,7 @@ function max_clique(G, w; solver="COPT", ϵ=0, feas_ϵ=0, verbose=false)
     return (z=value.(z), value=Int(objective_value(model)))
 end
 
-
-# Find all extreme points of the optimal face in the dual of model. Model needs to be
+# Find all extreme points of the optimal face in the dual of model. The model needs to be
 # already solved to optimality.
 function dual_extreme_points(model)
     opt_val = objective_value(model)
@@ -151,11 +154,12 @@ function dual_extreme_points(model)
     return -opt_ext_points
 end
 
-
-function dual_interior_point(model; solver="Mosek", ϵ=0, feas_ϵ=0, verbose=false)
+# Solve the dual of a model using interior point method to obtain a point in the relative interior
+# of thedual optimal face
+function dual_interior_point(model; solver=:Mosek, ϵ=0, feas_ϵ=0, verbose=false)
     println("Dualizing...")
     dual_model = dualize(model)
-    set_lp_optimizer(dual_model; solver=solver, require_interior_point=true, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
+    set_lp_optimizer(dual_model; solver=solver, use_interior_point=true, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
     optimize!(dual_model)
     return (λ=-value.(all_variables(dual_model)), value=objective_value(dual_model))
 end
@@ -179,45 +183,45 @@ function is_clique(G, S)
 end
 
 
-# # Solve max stable set by starting with the fractional stable set polytope (edge
-# # polytope) and adding clique constraint cutting planes by solving auxiliary problems.
-# # Return all optimal dual BFS and the corresponding cliques.
-# function qstab_lp_cutting_planes(G, w; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
-#     n = nv(G)
-#     E = collect(edges(G))
-#     model = Model()
-#     set_lp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
-#     @variable(model, x[1:n] >= 0)
+# Solve max stable set by starting with the fractional stable set polytope (edge
+# polytope) and adding clique constraint cutting planes by solving auxiliary problems.
+# Return all optimal dual BFS and the corresponding cliques.
+function qstab_lp_cutting_planes(G, w; solver=:SCS, ϵ=0, feas_ϵ=0, verbose=false)
+    n = nv(G)
+    E = collect(edges(G))
+    model = Model()
+    set_lp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
+    @variable(model, x[1:n] >= 0)
 
-#     cons = Vector{ConstraintRef}(undef, 0)
-#     cliques = Vector{Vector{Int64}}(undef, 0)
-#     for e in edges(G)
-#         push!(cons, @constraint(model, x[src(e)] + x[dst(e)] <= 1))
-#         push!(cliques, [src(e), dst(e)])
-#     end
-#     @objective(model, Max, w' * x)
-#     sub_sol_value = Inf
-#     while sub_sol_value > 1
-#         optimize!(model)
-#         # solve auxiliary max clique problem
-#         sub_sol = max_clique(G, value.(x))
-#         sub_sol_value = sub_sol.value
-#         if sub_sol_value > 1
-#             clique_to_add = findall(sub_sol.z .> 0.5)
-#             println("Clique to add:")
-#             println(clique_to_add)
-#             # remove redundant constraints of cliques that are subsets of the new clique
-#             index_to_delete = findall(map((c) -> issubset(c, clique_to_add), cliques))
-#             println("Deleting...")
-#             for i in sort(index_to_delete, rev=true)
-#                 println(cliques[i])
-#                 delete(model, cons[i])
-#                 deleteat!(cons, i)
-#                 deleteat!(cliques, i)
-#             end
-#             push!(cliques, clique_to_add)
-#             push!(cons, @constraint(model, sum(x[clique_to_add]) <= 1))
-#         end
-#     end
-#     return (x=value.(x), value=objective_value(model), λ_ext_points=dual_extreme_points(model), cliques=cliques)
-# end
+    cons = Vector{ConstraintRef}(undef, 0)
+    cliques = Vector{Vector{Int64}}(undef, 0)
+    for e in edges(G)
+        push!(cons, @constraint(model, x[src(e)] + x[dst(e)] <= 1))
+        push!(cliques, [src(e), dst(e)])
+    end
+    @objective(model, Max, w' * x)
+    sub_sol_value = Inf
+    while sub_sol_value > 1
+        optimize!(model)
+        # solve auxiliary max clique problem
+        sub_sol = max_clique(G, value.(x))
+        sub_sol_value = sub_sol.value
+        if sub_sol_value > 1
+            clique_to_add = findall(sub_sol.z .> 0.5)
+            println("Clique to add:")
+            println(clique_to_add)
+            # remove redundant constraints of cliques that are subsets of the new clique
+            index_to_delete = findall(map((c) -> issubset(c, clique_to_add), cliques))
+            println("Deleting...")
+            for i in sort(index_to_delete, rev=true)
+                println(cliques[i])
+                delete(model, cons[i])
+                deleteat!(cons, i)
+                deleteat!(cliques, i)
+            end
+            push!(cliques, clique_to_add)
+            push!(cons, @constraint(model, sum(x[clique_to_add]) <= 1))
+        end
+    end
+    return (x=value.(x), value=objective_value(model), λ_ext_points=dual_extreme_points(model), cliques=cliques)
+end

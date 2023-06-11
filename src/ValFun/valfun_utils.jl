@@ -1,3 +1,5 @@
+export print_valfun, qstab_to_sdp
+
 using JuMP, MosekTools, SCS, COSMO, COPT
 using LinearAlgebra, SparseArrays
 using Combinatorics
@@ -46,11 +48,11 @@ function set_sdp_optimizer(model; solver=:SCS, ϵ=0, feas_ϵ=0, verbose=false)
     end
 end
 
-function set_lp_optimizer(model; solver=:COPT, require_interior_point=false, ϵ=0, feas_ϵ=0, verbose=false)
-    if require_interior_point
+function set_lp_optimizer(model; solver=:COPT, use_interior_point=false, ϵ=0, feas_ϵ=0, verbose=false)
+    if use_interior_point
         if solver in [:COSMO, :SCS]
             set_sdp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
-        elseif solver == "Mosek"
+        elseif solver == :Mosek
             set_optimizer(model, optimizer_with_attributes(Mosek.Optimizer, "QUIET" => !verbose))
             if ϵ > 0
                 set_optimizer_attribute(model, "MSK_DPAR_INTPNT_TOL_REL_GAP", ϵ)
@@ -85,7 +87,6 @@ function set_lp_optimizer(model; solver=:COPT, require_interior_point=false, ϵ=
     end
 end
 
-
 function print_valfun(val, n, max_size=n)
     subsets = powerset(1:n, 0, max_size)
     for s in subsets
@@ -93,8 +94,7 @@ function print_valfun(val, n, max_size=n)
     end
 end
 
-
-# convert an optimal LP solution to max stable set to an optimal solution of the SDP relaxation
+# Convert a QSTAB LP solution to an SDP relaxation (Grotschel) dual solution
 function qstab_to_sdp(G, w, λ, cliques)
     n = nv(G)
     i0 = n + 1
@@ -113,22 +113,21 @@ function qstab_to_sdp(G, w, λ, cliques)
     return Matrix(Q)
 end
 
-
-# function sdp_to_qstab(Q, w, cliques; solver="SCS", ϵ=0, feas_ϵ=0, verbose=false)
-#     n = length(w)
-#     i0 = n + 1
-#     model = qstab_lp_model(solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
-#     @variable(model, λ[cliques] >= 0)
-#     @constraint(model, sum(λ) == Q[i0, i0])
-#     @constraint(model, [i in 1:n], 2 * sum(λ[c] for c in cliques if i in c) == Q[i, i] + w[i])
-#     for i in 1:n
-#         for j in 1:(i - 1)
-#             @constraint(model, sum(λ[c] for c in cliques if i in c && j in c) == Q[i, j])
-#         end
-#     end
-#     # display(all_constraints(model; include_variable_in_set_constraints = true))
-#     # println()
-#     optimize!(model)
-#     println(solution_summary(model))
-#     return value.(λ)
-# end
+# Attempt to convert an SDP relaxation (Grotschel) dual solution to a QSTAB LP solution
+function sdp_to_qstab(Q, w, cliques; solver=:SCS, ϵ=0, feas_ϵ=0, verbose=false)
+    n = length(w)
+    i0 = n + 1
+    model = qstab_lp_model(solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
+    @variable(model, λ[cliques] >= 0)
+    @constraint(model, sum(λ) == Q[i0, i0])
+    @constraint(model, [i in 1:n], 2 * sum(λ[c] for c in cliques if i in c) == Q[i, i] + w[i])
+    for i in 1:n
+        for j in 1:(i - 1)
+            @constraint(model, sum(λ[c] for c in cliques if i in c && j in c) == Q[i, j])
+        end
+    end
+    # display(all_constraints(model; include_variable_in_set_constraints = true))
+    optimize!(model)
+    println(solution_summary(model))
+    return value.(λ)
+end
