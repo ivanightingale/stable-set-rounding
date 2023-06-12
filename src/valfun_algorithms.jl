@@ -168,8 +168,8 @@ function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=fal
             if verbose
                println("Warning! When picking vertices starting with ", string(first_v), ", final weight is ", current_weight, "; original theta: ", θ)
            end
-        # elseif verbose
-        #     println("When picking vertices starting with ", string(first_v), ", final weight is ", current_weight)
+        elseif verbose
+            println("Starting at vertex ", string(first_v), ", final weight is ", current_weight)
         end
     end
     return is_success

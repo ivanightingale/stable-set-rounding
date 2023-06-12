@@ -25,7 +25,7 @@ function run_tabu_valfun(G, w, params, use_qstab=false)
     obj = out.sol.value
     println("Optimal value: ", obj)
     val = out.val
-    @time x_stable, _ = tabu_valfun(G, w, obj, val; ϵ=params[:valfun_ϵ], verbose=params[:verbose])
+    x_stable, _ = tabu_valfun(G, w, obj, val; ϵ=params[:valfun_ϵ], verbose=params[:verbose])
     println("Retrieved value: ", w' * x_stable)
 end
 
@@ -34,7 +34,15 @@ function run_tabu_valfun_test(G, w, params, use_qstab=false)
     obj = out.sol.value
     println("Optimal value: ", obj)
     val = out.val
-    @time tabu_valfun_test(G, w, obj, val; ϵ=params[:valfun_ϵ], verbose=params[:verbose])
+    tabu_valfun_test(G, w, obj, val; ϵ=params[:valfun_ϵ], verbose=params[:verbose])
+end
+
+function run_round_valfun(G, w, params, use_qstab=false)
+    out = get_params_valfun(G, w, params, use_qstab)
+    obj = out.sol.value
+    println("Optimal value: ", obj)
+    val = out.val
+    x_stable = round_valfun(G, w, obj, val)
 end
 
 # Check whether the QSTAB LP interior point value function and the SDP value function result in the

@@ -1,4 +1,4 @@
-Note: all data are on complements of the graphs
+## Note: all data are on complements of the graphs
 
 ## MANN-a9
 | \|V\| | \|E\|  |  θ  |  α  |   round_valfun   |  tabu_valfun  |
@@ -102,7 +102,7 @@ Note: all data are on complements of the graphs
 ## c-fat200-1
 | \|V\| | \|E\|  |   θ |  α  |   round_valfun   | tabu_valfun  |  perfect?  |
 | ----- | ------ | --- |   ----     |  ---- | ----- | -----  |
-|  200   |  18366  |  12   |  12  |   12   |   12   |   complement is not quasi-perfect     |
+|  200   |  18366  |  12   |  12  |   12   |   12   |   No, complement is not weakly perfect     |
 
 ## c-fat200-2
 | \|V\| | \|E\|  |   θ |  α  |   round_valfun   | tabu_valfun  |  perfect?  |
@@ -145,8 +145,8 @@ Note: all data are on complements of the graphs
 | method | fixed point iteration value | fixed point iteration value (no shift) | hyperplane rounding value | greedy value |
 | ------ | ---- | -------- | ---- | --- |
 | Lovasz SDP |  |  |  |  32 |
-| Grotschel SDP | 32 | ~32~ |    |  32 |
-| Benson & Ye SDP | ~32~ | 32 | 22 |  |
+| Grotschel SDP | 32 | ~~32~~ |    |  32 |
+| Benson & Ye SDP | ~~32~~ | 32 | 22 |  |
 
 
 ## hamming6-4
@@ -157,7 +157,7 @@ Note: all data are on complements of the graphs
 | method | fixed point iteration value | fixed point iteration value (no shift) | hyperplane rounding value | greedy value |
 | ------ |  ---- | -------- | ---- | --- |
 | Lovasz SDP |  |  |  |  4 |
-| Grotschel SDP | ~5.33~  | ~5.33~ | 4 |  |
+| Grotschel SDP | ~~5.33~~  | ~~5.33~~ | 4 |  |
 | Benson & Ye SDP | 4 | 0 | 3  |  |
 
 
@@ -176,7 +176,7 @@ can't use COSMO
 | method | fixed point iteration value | fixed point iteration value (no shift) | hyperplane rounding value | greedy value |
 | ------ |  ---- | -------- | ---- | --- |
 | Lovasz SDP |  |  |  |  13 |
-| Grotschel SDP | 16  | ~16~ |  | 13 |
+| Grotschel SDP | 16  | ~~~~16~~~~ |  | 13 |
 | Benson & Ye SDP | 16 | 0 | 9 |  |
 
 
@@ -202,7 +202,7 @@ COSMO bugs out
 | method | fixed point iteration value | fixed point iteration value (no shift) | hyperplane rounding value | greedy value |
 | ------ | --- | ---- | -------- | ---- |
 | Lovasz SDP |  |  |  | 4 |
-| Grotschel SDP | 4 | ~4~ |  | 4 |
+| Grotschel SDP | 4 | ~~4~~ |  | 4 |
 | Benson & Ye SDP | 4 | 0 | 4 | |
 
 
@@ -214,7 +214,7 @@ COSMO bugs out
 | method | fixed point iteration value | fixed point iteration value (no shift) | hyperplane rounding value | greedy value |
 | ------ |  ---- | -------- | ---- |  --- |
 | Lovasz SDP |  |  |  | 11 |
-| Grotschel SDP | 14 | ~14~  |  | 14 |
+| Grotschel SDP | 14 | ~~14~~  |  | 14 |
 | Benson & Ye SDP | 14 | 0 | 9 | |
 
 

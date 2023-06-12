@@ -1,6 +1,6 @@
 export get_valfun, valfun
 
-function get_valfun(G, w, solve_dual=true, formulation=:grotschel; solver=:COPT, ϵ=0, feas_ϵ=0, use_div=true, pinv_rtol=1e-6, verbose=false)
+function get_valfun(G, w, solve_dual=true, formulation=:grotschel; solver=:COPT, ϵ=0, feas_ϵ=0, use_div=true, pinv_rtol=1e-9, verbose=false)
     n = nv(G)
     i0 = n + 1
     E = collect(edges(G))
@@ -8,24 +8,16 @@ function get_valfun(G, w, solve_dual=true, formulation=:grotschel; solver=:COPT,
     set_sdp_optimizer(model; solver=solver, ϵ=ϵ, feas_ϵ=feas_ϵ, verbose=verbose)
 
     if formulation == :grotschel
-        if solve_dual
-            sol = solve_grotschel_dual(model, G, w)
-        else
-            sol = solve_grotschel_primal(model, G, w)
-        end
+        sol = solve_grotschel_sdp(Val(solve_dual), model, G, w)
     elseif formulation == :lovasz
-        if solve_dual
-            sol = solve_lovasz_dual(model, G, w)
-        else
-            sol = solve_lovasz_primal(model, G, w)
-        end
+        sol = solve_lovasz_sdp(Val(solve_dual), model, G, w)
     end
     # println(eigmin(Matrix(sol.Q)))
 
     return (val=valfun(sol.Q; use_div, pinv_rtol), sol=sol)
 end
 
-function solve_grotschel_dual(model, G, w)
+function solve_grotschel_sdp(::Val{true}, model, G, w)
     n = nv(G)
     i0 = n + 1
     E = edges(G)
@@ -45,7 +37,7 @@ function solve_grotschel_dual(model, G, w)
     return (X=X_val, Q=Q_val, value=obj_val)
 end
 
-function solve_grotschel_primal(model, G, w)
+function solve_grotschel_sdp(::Val{false}, model, G, w)
     n = nv(G)
     i0 = n + 1
     E_c = edges(complement(G))
@@ -64,7 +56,7 @@ function solve_grotschel_primal(model, G, w)
     return (X=X_val, Q=Q_val, value=obj_val)
 end
 
-function solve_lovasz_dual(model, E, w)
+function solve_lovasz_sdp(::Val{true}, model, G, w)
     n = nv(G)
     E = edges(G)
     @variable(model, t)
@@ -84,7 +76,7 @@ function solve_lovasz_dual(model, E, w)
     return (X=X_val, Q=Q_val, value=obj_val)
 end
 
-function solve_lovasz_primal(model, E, w)
+function solve_lovasz_sdp(::Val{false}, model, G, w)
     n = nv(G)
     E_c = edges(complement(G))
     @variable(model, X_diag[1:n])

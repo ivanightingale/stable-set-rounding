@@ -1,6 +1,5 @@
-using GraphPlot, Compose, Colors
-using Cairo, Fontconfig
-using Graphs
+using GraphPlot, Compose, Colors, Cairo, Fontconfig
+using Graphs, GraphIO
 using MatrixMarket, DelimitedFiles
 using Random
 using Combinatorics
@@ -104,9 +103,8 @@ end
 # function parse_mps()
 # end
 
-# Generate a 
-# TODO: also save a graph file
-function generate_generalized_split_graph(n)
+# Generate a generalized split graph.
+function generate_generalized_split_graph(n, file_name)
     b = rand([1,-1])
     E = edges(erdos_renyi(n, 0.5))
     k = rand(0:n-1)  # first k vertices are put in the central clique C; exclude the case where C includes all n vertices
@@ -139,6 +137,15 @@ function generate_generalized_split_graph(n)
     if b < 0
         return complement(G)
     end
-    plot_graph(G, "test_gsg"; add_label=true)
+    # plot_graph(G, "test_gsg"; add_label=true)
+    savegraph("dat/gsg/" * file_name, G)
+    return G
+end
+
+function load_gsg_graph(graph_name, use_complement=false)
+    G = loadgraph("dat/gsg/" * graph_name)
+    if use_complement
+        G = complement(G)
+    end
     return G
 end
