@@ -97,6 +97,9 @@ function qstab_lp_ext(G, w, use_all_cliques=true; solver=:COPT, ϵ=0, feas_ϵ=0,
     return (x=value.(x), value=objective_value(model), λ_ext_points=λ_ext_points, cliques=cliques)
 end
 
+# Solve max stable set by solving an LP over the clique polytope (QSTAB), constructed by adding
+# constraints for either all cliques or all maximal cliques.
+# Return an interior point dual solution and the corresponding cliques in the same order.
 function qstab_lp_int(G, w, use_all_cliques=true; solver=:Mosek, ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     E = collect(edges(G))

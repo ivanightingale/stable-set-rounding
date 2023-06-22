@@ -1,5 +1,9 @@
 export get_valfun, valfun
 
+# Get an SDP value function by solving either the primal or the dual of either the Lovasz or 
+# the Grotschel formulation of the Lovasz theta SDP.
+# COPT solves the primal faster than dual if G is dense, and solves the dual faster than primal
+# if G is sparse.
 function get_valfun(G, w, solve_dual=true, formulation=:grotschel; solver=:COPT, ϵ=0, feas_ϵ=0, use_div=true, pinv_rtol=1e-9, verbose=false)
     n = nv(G)
     i0 = n + 1
@@ -17,6 +21,7 @@ function get_valfun(G, w, solve_dual=true, formulation=:grotschel; solver=:COPT,
     return (val=valfun(sol.Q; use_div, pinv_rtol), sol=sol)
 end
 
+# Grotschel dual
 function solve_grotschel_sdp(::Val{true}, model, G, w)
     n = nv(G)
     i0 = n + 1
@@ -37,6 +42,7 @@ function solve_grotschel_sdp(::Val{true}, model, G, w)
     return (X=X_val, Q=Q_val, value=obj_val)
 end
 
+# Grotschel primal
 function solve_grotschel_sdp(::Val{false}, model, G, w)
     n = nv(G)
     i0 = n + 1
@@ -56,6 +62,7 @@ function solve_grotschel_sdp(::Val{false}, model, G, w)
     return (X=X_val, Q=Q_val, value=obj_val)
 end
 
+# Lovasz dual
 function solve_lovasz_sdp(::Val{true}, model, G, w)
     n = nv(G)
     E = edges(G)
@@ -76,6 +83,7 @@ function solve_lovasz_sdp(::Val{true}, model, G, w)
     return (X=X_val, Q=Q_val, value=obj_val)
 end
 
+# Lovasz primal
 function solve_lovasz_sdp(::Val{false}, model, G, w)
     n = nv(G)
     E_c = edges(complement(G))
@@ -103,6 +111,7 @@ function valfun(Q; use_div=true, pinv_rtol=1e-9)
     i0 = n + 1
     A = Symmetric(Q[1:n,1:n])
     b = Q[1:n, i0]
+    # TODO: try using HSL
     if use_div
         return S -> b[S]' * (A[S, S] \ b[S])
     else

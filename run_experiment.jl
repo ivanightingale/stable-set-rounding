@@ -13,7 +13,7 @@ sdp_params = Dict(
     :solver_ϵ => 0,  # solver gap tolerance, 0 for solver default
     :solver_feas_ϵ => 0,  # solver feasibility tolerance, 0 for solver default
     :valfun_ϵ => 1e-6,  # valfun tolerance in discarding rules, etc.
-    :use_div => true,  # whether to use \ in computing valfun
+    :use_div => true,  # whether to use \ in computing valfun. If false, use pinv() instead.
     :pinv_rtol => 1e-9,  # rtol value in pinv()
     :verbose => true,
 )
@@ -27,14 +27,14 @@ qstab_params = Dict(
     :verbose => true,
 )
 
-use_complement = true
-graph_name = "p-hat1000-3"
-G = load_dimacs_graph(graph_name, use_complement)
+# use_complement = true
+# graph_name = "p-hat1000-3"
+# G = load_dimacs_graph(graph_name, use_complement)
 
-# use_complement = false
-# graph_name = "diego-11"
-# family = "perfect"
-# G = load_family_graph(graph_name, family, use_complement)
+use_complement = false
+graph_name = "ivan-6"
+family = "perfect"
+G = load_family_graph(graph_name, family, use_complement)
 
 # use_complement = false
 # G, graph_name = generate_family_graph("hole", 10, use_complement; k=3)

@@ -5,7 +5,7 @@ using LinearAlgebra, SparseArrays
 using Combinatorics
 using Graphs
 
-function set_sdp_optimizer(model; solver=:SCS, ϵ=0, feas_ϵ=0, verbose=false)
+function set_sdp_optimizer(model; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
     if solver == :COSMO  # for larger graphs
         set_optimizer(model, optimizer_with_attributes(COSMO.Optimizer, "decompose" => true, "max_iter" => 1000000, "verbose" => verbose))
         if ϵ > 0

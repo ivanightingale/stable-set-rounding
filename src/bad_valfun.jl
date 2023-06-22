@@ -5,8 +5,9 @@ using .ValFun
 include("valfun_algorithms.jl")
 
 # Solve an LP to find weights and a value function such that the value function satisfies some
-# properties we know about the SDP and QSTAB LP value functions, and all vertices are not discarded,
-# but not all vertices are in maximum stable sets..
+# properties we know about the SDP and QSTAB LP value functions, and no vertex gets discarded
+# by the value function at the current state. The value function is "bad" if, given the
+# weights, there exists some vertex that is in fact not in any maximum stable set.
 function find_bad_valfun(G; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     N = collect(1:n)
@@ -44,7 +45,6 @@ function find_bad_valfun(G; solver=:COPT, ϵ=0, feas_ϵ=0, verbose=false)
 
     bad_w = value.(w)
     bad_val = S -> isempty(S) ? 0 : value(v[S])
-    println(bad_w)
 
     return (w=bad_w, val=bad_val, obj=objective_value(model))
 end

@@ -18,7 +18,8 @@ function round_valfun(G, w, θ, val; S = collect(1:n), x_stable = falses(n))
     return x_stable
 end
 
-# Use value function to iteratively discard and pick vertices to form a stable set.
+# Use value function to iteratively discard and pick vertices to form a stable set. Works for
+# most weakly perfect graphs tested so far.
 function tabu_valfun(G, w, θ, val, S=collect(1:nv(G)), x_stable=falses(nv(G)); max_iter=nv(G), ϵ=1e-6, verbose=true)
     if max_iter == 0
         return x_stable, S
@@ -100,7 +101,8 @@ end
 
 # Apply tabu_valfun() to pick n_start number of vertices. Next, discard vertices that should be
 # discarded. Then, for each vertex in the remaining set, test whether it is in some maximum stable set
-function tabu_valfun_test(G, w, θ, val; use_theta=false, n_start=0, ϵ=1e-6, solver="SCS", solver_ϵ=0, feas_ϵ=0, graph_name=nothing, use_complement=nothing, verbose=false)
+# by calling stable_set_test().
+function tabu_valfun_test(G, w, θ, val; use_theta=false, n_start=0, ϵ=1e-6, solver=:COPT, solver_ϵ=0, feas_ϵ=0, graph_name=nothing, use_complement=nothing, verbose=false)
     # First, pick a specified number of vertices with tabu_valfun(). If n_start=0, this will simply run
     # vertex_value_discard!()
     if n_start == 0
@@ -138,7 +140,7 @@ function tabu_valfun_test(G, w, θ, val; use_theta=false, n_start=0, ϵ=1e-6, so
 end
 
 # Verify each vertex in S is in some maximum stable set by picking it first and
-# then iteratively discarding and picking (as in tabu_valfun).
+# then iteratively discarding and picking (like in tabu_valfun()).
 # Note that good points could also fail since the picking is naive. To double check, use theta_test().
 function stable_set_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(nv(G)); ϵ=1e-6, verbose=false)
     is_success = true
@@ -177,7 +179,7 @@ end
 
 # Verify each vertex in S is in some maximum stable set by picking it and
 # computing the theta value of the remaining subgraph
-function theta_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(nv(G)); ϵ=1e-6, solver="SCS", solver_ϵ=0, feas_ϵ=0, verbose=false)
+function theta_test(G, w, θ, val, S=collect(1:nv(G)), initial_x_stable=falses(nv(G)); ϵ=1e-6, solver=:COPT, solver_ϵ=0, feas_ϵ=0, verbose=false)
     n = nv(G)
     is_success = true
     for first_v in S
